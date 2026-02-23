@@ -15,7 +15,7 @@ def train_single_iteration(
     pass
 
 
-def extract_model_weights(model: TabularARGN
+def extract_model_weights(
 ) -> None:
     pass
 
