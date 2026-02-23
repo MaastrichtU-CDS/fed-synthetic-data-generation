@@ -1,208 +1,210 @@
-# Federated Synthetic Data Generation
+# STRONG AYA's General Vantage6 tools
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+<p align="center">
+<a href="https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation/workflows/"><img alt="Test status" src="https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation/workflows/Test%20Suite/badge.svg"></a>
+<a><img alt="Coverage" src="https://raw.githubusercontent.com/MaastrichtU-CDS/fed-synthetic-data-generation/main/tests/coverage-badge.svg"></a>
+<a href="https://www.python.org/downloads/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10+-blue.svg"></a>
+<a href="https://opensource.org/licenses/Apache-2.0"><img alt="Licence: Apache 2.0" src="https://img.shields.io/badge/Licence-Apache%202.0-blue.svg"></a>
+<br>
+<a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
+<a href="https://flake8.pycqa.org/"><img alt="Linting: flake8" src="https://img.shields.io/badge/linting-flake8-informational"></a>
+<a href="http://mypy-lang.org/"><img alt="Type checking: mypy" src="https://img.shields.io/badge/type%20checking-mypy-informational"></a>
+<a href="https://github.com/PyCQA/bandit"><img alt="Security: bandit" src="https://img.shields.io/badge/security-bandit-informational"></a>
+<a href="https://github.com/pyupio/safety"><img alt="Security: safety" src="https://img.shields.io/badge/security-safety-informational"></a>
+</p>
 
-A Python library for generating synthetic data in a federated learning context with privacy-preserving capabilities.
+# Purpose of this repository
 
-## Purpose
+This repository contains general functionalities and tools for the STRONG AYA project.
+They are designed to be used with the Vantage6 framework for federated analytics and learning
+and are intended to facilitate and simplify the development of Vantage6 algorithms.
 
-This library provides tools and utilities for training synthetic data generators across multiple nodes in a federated manner, enabling:
-- Privacy-preserving synthetic data generation
-- Distributed training without centralizing data
-- Differential privacy mechanisms
-- Flexible aggregation strategies
+The code in this repository is available as a Python library here on GitHub or through direct reference with `pip`.
 
-## Features
+# Structure of the repository
 
-- **Federated Training**: Train synthetic data generators across multiple nodes without sharing raw data
-- **Privacy Preservation**: Built-in differential privacy mechanisms
-- **Tabular Data Support**: Generate high-quality synthetic tabular data
-- **Flexible Architecture**: Modular design for easy extension and customization
-- **Comprehensive Testing**: Unit, integration, and empirical validation tests
+The various functions are organised in different sections, consisting of:
 
-## Installation
+-
 
-### From Source
+# Usage
+
+The library provides functions that can be included in a federated algorithm as the algorithm developer sees fit.
+The functions are designed to be modular and can be used independently or in combination with other functions.
+
+## Including the library in a Vantage6 algorithm
+
+The library can be included in your Vantage6 algorithm by listing it in the `requirements.txt` and `setup.py` file of
+your
+algorithm.
+
+For the `requirements.txt` file, you can add the following line to the file:
+
+```
+git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git@v0.1.0
+```
+
+For the `setup.py` file, you can add the following line to the `install_requires` list:
+
+```python
+        "fed-synthetic-data-generation @ git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git@v0.1.0",
+```
+
+The algorithm's `setup.py`, particularly the `install_requirements`, section file should then look something like this:
+
+```python
+from os import path
+from codecs import open
+from setuptools import setup, find_packages
+
+# We are using a README.md, if you do not have this in your folder, simply replace this with a string.
+here = path.abspath(path.dirname(__file__))
+with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
+setup(
+    name="v6-not-an-actual-algorithm",
+    version="1.0.0",
+    description="Fictive Vantage6 algorithm that performs federated synthetic data generator training.",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/STRONGAYA/v6-not-an-actual-algorithm",
+    packages=find_packages(),
+    python_requires=">=3.10",
+    install_requires=[
+        "vantage6-algorithm-tools",
+        "numpy",
+        "pandas",
+        "fed-synthetic-data-generation @ git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git@v0.1.0"
+        # other dependencies
+    ]
+)
+```
+
+## Central (aggregating) example
+
+Example usage of various functions in a central (aggregating) section of a federated algorithm:
+
+```python
+
+```
+
+## Node or local (participating) example
+
+Example usage of various functions in a node (participating) section of a Vantage6 algorithm:
+
+```python
+
+```
+
+The various functions are available through `pip install` for debugging and testing purposes.
+The library can be installed as follows:
 
 ```bash
-git clone https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git
-cd fed-synthetic-data-generation
-pip install -e .
+pip install git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git
 ```
 
-### Development Installation
+# Testing
 
-For development with all testing dependencies:
+This repository includes a comprehensive testing framework to ensure the reliability and correctness of all functions,
+especially in federated scenarios.
+
+## Test Structure
+
+```
+tests/
+├── conftest.py                           # Common fixtures and test utilities
+├── unit/                                 # Unit tests for individual functions
+│   ├── test_federated_training.py        # Tests for federated training functions
+│   ├── test_privacy_measures.py          # Tests for privacy functions
+│   └── test_utils.py                      # Tests for utility functions 
+├── empirical/                            # Empirical validation tests
+│   └── test_federated_vs_centralised.py  # Federated vs centralised comparisons
+└── utils/                                # Test helper utilities
+    └── test_helpers.py                   # Validation and comparison tools
+```
+
+## Running Tests
+
+### Prerequisites
+
+Install test dependencies:
 
 ```bash
-pip install -e ".[dev]"
+pip install pytest pytest-cov pytest-mock hypothesis faker
 ```
 
-## Quick Start
-
-### Basic Usage
-
-```python
-import pandas as pd
-from fed_synthetic_data import TabularSyntheticGenerator
-
-# Load your data
-data = pd.read_csv("your_data.csv")
-
-# Create and train generator
-generator = TabularSyntheticGenerator(
-    model_type="tabular",
-    privacy_mechanism="dp",
-    epsilon=1.0
-)
-generator.fit(data)
-
-# Generate synthetic data
-synthetic_data = generator.sample(n_samples=1000)
-```
-
-### Federated Training
-
-```python
-from fed_synthetic_data import train_federated_generator, FederatedTrainer
-from fed_synthetic_data.utils import split_data_by_nodes
-
-# Simulate federated setup
-node_datasets = split_data_by_nodes(data, n_nodes=3)
-
-# Train on each node
-generators = []
-for node_data in node_datasets:
-    gen = train_federated_generator(
-        node_data,
-        privacy_config={"privacy_mechanism": "dp", "epsilon": 1.0}
-    )
-    generators.append(gen)
-
-# Use federated trainer for coordination
-trainer = FederatedTrainer(
-    aggregation_method="fedavg",
-    num_rounds=10
-)
-
-for i, dataset in enumerate(node_datasets):
-    trainer.add_node(f"node_{i}", dataset)
-
-results = trainer.train()
-```
-
-### With Privacy Preservation
-
-```python
-from fed_synthetic_data.privacy_measures import (
-    apply_differential_privacy,
-    compute_privacy_budget
-)
-
-# Apply differential privacy
-private_data = apply_differential_privacy(
-    data,
-    epsilon=1.0,
-    mechanism="laplace"
-)
-
-# Compute privacy budget
-total_budget = compute_privacy_budget(
-    num_queries=10,
-    epsilon_per_query=0.1,
-    composition_method="basic"
-)
-```
-
-## Library Structure
-
-The library is organized into the following modules:
-
-- **`synthetic_generator`**: Core synthetic data generation classes
-- **`federated_training`**: Federated learning coordination and aggregation
-- **`privacy_measures`**: Differential privacy and privacy-preserving mechanisms
-- **`utils`**: Utility functions for data processing and validation
-
-## Testing
-
-The library includes comprehensive testing:
+### Basic Test Execution
 
 ```bash
 # Run all tests
 pytest
 
-# Run specific test categories
-pytest tests/unit/          # Unit tests
-pytest tests/integration/   # Integration tests
-pytest tests/empirical/     # Empirical validation
+# Run unit tests only
+pytest tests/unit/
 
-# Run with coverage
-pytest --cov=fed_synthetic_data --cov-report=html
+# Run empirical tests only
+pytest tests/empirical/
+
+# Run with coverage report
+pytest --cov=vantage6_strongaya_general --cov-report=html
+
+# Run specific test module
+pytest tests/unit/test_general_statistics.py
+
+# Run with verbose output
+pytest -v
 ```
 
-For detailed testing information, see the [Testing Guide](tests/TESTING_GUIDE.md).
+### Test Categories
 
-## Documentation
+- **Unit Tests**: Test individual functions in isolation
+- **Empirical Tests**: Validate federated vs centralised mathematical equivalence
+- **Performance Tests**: Benchmark function performance with large datasets
+- **Edge Case Tests**: Test behaviour with unusual data distributions
 
-- [Testing Guide](tests/TESTING_GUIDE.md): Comprehensive guide to the testing framework
-- API documentation (coming soon)
+### Federated vs Centralised Validation
 
-## Architecture
+The test suite includes comprehensive empirical validation that federated statistical computations produce equivalent
+results to their centralised counterparts:
 
-The library follows a modular architecture inspired by:
-- [v6-tools-general](https://github.com/STRONGAYA/v6-tools-general) for testing and structure
-- [fed-mostlyai-engine](https://github.com/skarrea/fed-mostlyai-engine) for synthetic data generation concepts
+```python
 
-### Key Components
-
-1. **Synthetic Data Generators**: Create synthetic data that preserves statistical properties
-2. **Federated Trainer**: Coordinate training across multiple nodes
-3. **Privacy Mechanisms**: Apply differential privacy and other privacy-preserving techniques
-4. **Utilities**: Helper functions for data processing and validation
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-## Requirements
-
-- Python >= 3.10
-- NumPy >= 1.24.0
-- Pandas >= 2.0.0
-- PyTorch >= 2.0.0
-
-See `pyproject.toml` for complete dependency list.
-
-## License
-
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-This library's architecture is inspired by:
-- [STRONGAYA/v6-tools-general](https://github.com/STRONGAYA/v6-tools-general) - Testing and library structure
-- [skarrea/fed-mostlyai-engine](https://github.com/skarrea/fed-mostlyai-engine) - Synthetic data generation approach
-
-## Contact
-
-For questions or issues, please open an issue on GitHub or contact Maastricht University - CDS.
-
-## Citation
-
-If you use this library in your research, please cite:
-
-```bibtex
-@software{fed_synthetic_data,
-  title = {Federated Synthetic Data Generation},
-  author = {Maastricht University - CDS},
-  year = {2024},
-  url = {https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation}
-}
 ```
+
+### Continuous Integration
+
+Tests run automatically on every push and pull request via GitHub Actions:
+
+- Multiple Python versions (starting with 3.10)
+- Code coverage reporting
+- Performance benchmarking
+- Security scanning
+
+## Contributing to Tests
+
+When contributing new functionality:
+
+1. **Add unit tests** for all new functions
+2. **Add integration tests** for complete workflows
+3. **Add empirical tests** for federated vs centralised scenarios
+3. **Include edge case testing** for robustness
+4. **Update test data** if needed for new scenarios
+5. **Maintain an acceptable degree of code coverage**
+
+### Test Guidelines
+
+- Use descriptive test names that explain what is being tested
+- Include both positive and negative test cases
+- Test edge cases and error conditions
+- Use realistic synthetic data
+- Mock external dependencies (AlgorithmClient, environment variables)
+- Validate both structure and values of results
+
+# Contributers
+
+- J. Hogenboom
+- B. S. Abrahamsen
+
+# References
+
+- [Vantage6](vantage6.ai)

@@ -5,16 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fed-synthetic-data"
 version = "0.1.0"
-description = "A library for federated synthetic data generation with privacy-preserving capabilities"
+description = "Tools for federated synthetic data generator training."
 authors = [
-    {name = "Maastricht University - CDS", email = "info@maastrichtuniversity.nl"}
+    { name = "Joshi Hogenboom (@Jhogenboom)", email = "joshi.hogenboom@maastrichtuniversity.nl" },
+    { name = "Bendik Skarre Abrahamsen (@skarrea)", email = "bendik.s.abrahamsen@ntnu.no" }
 ]
 maintainers = [
-    {name = "Maastricht University - CDS", email = "info@maastrichtuniversity.nl"}
+    { name = "Joshi Hogenboom (@Jhogenboom)", email = "joshi.hogenboom@maastrichtuniversity.nl" },
+    { name = "Bendik Skarre Abrahamsen (@skarrea)", email = "bendik.s.abrahamsen@ntnu.no" }
 ]
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Apache-2.0"}
+license = { text = "Apache-2.0" }
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
@@ -27,9 +29,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "numpy>=1.24.0",
-    "pandas>=2.0.0",
-    "torch>=2.0.0",
+    "mostlyai-engine>=2.4.0",
 ]
 
 [project.optional-dependencies]
@@ -56,7 +56,7 @@ dev = [
 "Bug Tracker" = "https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation/issues"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 packages = ["fed_synthetic_data"]
 
 [tool.pytest.ini_options]
