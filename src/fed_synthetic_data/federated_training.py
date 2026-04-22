@@ -1,51 +1,82 @@
 """
 Federated training utilities for synthetic data generation.
 
-This module provides classes and functions for coordinating federated training
-of synthetic data generators across multiple nodes.
+This module provides helper functions for coordinating federated training
+of synthetic data generators across multiple nodes. These are intended to be
+imported into a vantage6 algorithm.
 """
 
-import pandas as pd
+import base64
+import numpy as np
 
-from typing import Optional
-from mostlyai.engine import TabularARGN
-
-EPOCHS_PER_ITERATION = 1
+from functools import reduce
 
 
-def train_single_iteration(
-    data: pd.DataFrame,
-    model: Optional[TabularARGN] = None,
-) -> TabularARGN:
+def aggregation_model_weights_weighted_average(results: list[tuple[list[np.ndarray], int]]) -> list[np.ndarray]:
     """
-    Perform a single iteration of training for the given model using the provided data.
+    Compute weighted average of model parameters.
+
+    Ported from Flower (Apache-2.0):
+    https://github.com/flwrlabs/flower/blob/983b0f29/framework/py/flwr/server/strategy/aggregate.py#L28-L43
 
     Args:
-        data (pd.DataFrame): The training data.
-        model (TabularARGN): The model to train.
+        results (list[tuple[list[np.ndarray], int]]): List of tuples containing model weights
+            and the number of training examples for each node.
 
     Returns:
-        TabularARGN: The updated model after training.
+        list[np.ndarray]: The aggregated model weights.
     """
-    if model is None:
-        model = TabularARGN(max_epochs=EPOCHS_PER_ITERATION)
-    else:
-        if model.max_epochs is None or model.max_epochs != EPOCHS_PER_ITERATION:
-            # TODO Warn the user that the model's max_epochs is not set to the expected value
-            pass
-
-    model.fit(data)
-
-    return model
-
-
-def extract_model_weights() -> None:
-    pass
+    num_examples_total = sum(n for (_, n) in results)
+    weighted_weights = [
+        [layer * n for layer in weights]
+        for weights, n in results
+    ]
+    return [
+        reduce(np.add, layer_updates) / num_examples_total
+        for layer_updates in zip(*weighted_weights, strict=True)
+    ]
 
 
-def aggregate_model_updates() -> None:
-    pass
+def weights_to_json(weights: list[np.ndarray]) -> list[dict]:
+    """
+    Serialise model weights for JSON transport.
+
+    Args:
+        weights (list[np.ndarray]): List of model weights to serialise.
+
+    Returns:
+        list[dict]: List of dictionaries representing the weights in JSON-serialisable format.
+    """
+    return [
+        {"shape": w.shape, "dtype": str(w.dtype), "data": base64.b64encode(w.tobytes()).decode()}
+        for w in weights
+    ]
 
 
-def aggregation_model_weights() -> None:
+def weights_from_json(entries: list[dict]) -> list[np.ndarray]:
+    """
+    Deserialise model weights from JSON transport format.
+
+    Each dictionary must contain:
+        - "data": Base64-encoded weight data as a string.
+        - "dtype": A string representing the data type of the weight.
+        - "shape": A tuple (or list) representing the shape of the weight array.
+
+    Args:
+        entries (list[dict]): List of serialised weight dictionaries.
+
+    Returns:
+        list[np.ndarray]: Deserialised model weights as numpy arrays.
+    """
+    return [
+        np.frombuffer(base64.b64decode(e["data"]), dtype=e["dtype"]).reshape(e["shape"])
+        for e in entries
+    ]
+
+
+def evaluate_loss() -> None:
+    """
+    TODO implement loss evaluation logic
+    :return:
+    """
     pass

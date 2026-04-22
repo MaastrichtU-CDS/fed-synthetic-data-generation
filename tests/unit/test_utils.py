@@ -108,3 +108,57 @@ class TestSortColumns:
         # Verify result is different
         assert list(result.columns) != original_columns
         assert list(result.columns) == ["apple", "zebra"]
+
+    def test_sort_columns_explicit_order(self):
+        """Test reordering columns using an explicit column_order list."""
+        df = pd.DataFrame({"apple": [1, 2, 3], "banana": [4, 5, 6], "zebra": [7, 8, 9]})
+
+        result = sort_columns(df, column_order=["zebra", "apple", "banana"])
+
+        assert list(result.columns) == ["zebra", "apple", "banana"]
+        assert result["zebra"].tolist() == [7, 8, 9]
+        assert result["apple"].tolist() == [1, 2, 3]
+        assert result["banana"].tolist() == [4, 5, 6]
+
+    def test_sort_columns_explicit_order_matches_alphabetical(self):
+        """Test that passing the sorted column list explicitly gives the same result as no argument."""
+        df = pd.DataFrame({"zebra": [1, 2, 3], "apple": [4, 5, 6], "banana": [7, 8, 9]})
+
+        auto_sorted = sort_columns(df)
+        explicit = sort_columns(df, column_order=list(auto_sorted.columns))
+
+        assert list(explicit.columns) == list(auto_sorted.columns)
+
+    def test_sort_columns_explicit_order_is_federated_workflow(self):
+        """Test the federated use-case: derive order on one node, apply it on another."""
+        df_node1 = pd.DataFrame({"zebra": [1, 2], "apple": [3, 4], "banana": [5, 6]})
+        df_node2 = pd.DataFrame({"banana": [7, 8], "zebra": [9, 10], "apple": [11, 12]})
+
+        # Node 1 derives the canonical order
+        df_node1_sorted = sort_columns(df_node1)
+        canonical_order = df_node1_sorted.columns.tolist()
+
+        # Node 2 applies the same order
+        df_node2_sorted = sort_columns(df_node2, column_order=canonical_order)
+
+        assert list(df_node1_sorted.columns) == list(df_node2_sorted.columns)
+
+    def test_sort_columns_explicit_order_subset_introduces_nans(self):
+        """Test that a column_order omitting a column produces NaN for the missing column."""
+        df = pd.DataFrame({"apple": [1, 2], "banana": [3, 4], "zebra": [5, 6]})
+
+        result = sort_columns(df, column_order=["apple", "banana"])
+
+        assert list(result.columns) == ["apple", "banana"]
+        assert "zebra" not in result.columns
+
+    def test_sort_columns_explicit_order_extra_column_introduces_nans(self):
+        """Test that a column_order referencing a non-existent column produces a NaN column."""
+        import math
+
+        df = pd.DataFrame({"apple": [1, 2], "banana": [3, 4]})
+
+        result = sort_columns(df, column_order=["apple", "banana", "zebra"])
+
+        assert list(result.columns) == ["apple", "banana", "zebra"]
+        assert all(math.isnan(v) for v in result["zebra"].tolist())

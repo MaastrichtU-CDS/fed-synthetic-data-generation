@@ -1,4 +1,4 @@
-# STRONG AYA's General Vantage6 tools
+# Tools for federated synthetic data generation
 
 <p align="center">
 <a href="https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation/workflows/"><img alt="Test status" src="https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation/workflows/Test%20Suite/badge.svg"></a>
@@ -15,17 +15,26 @@
 
 # Purpose of this repository
 
-This repository contains general functionalities and tools for the STRONG AYA project.
-They are designed to be used with the Vantage6 framework for federated analytics and learning
-and are intended to facilitate and simplify the development of Vantage6 algorithms.
+This repository provides helper functions for federated synthetic data generator training using e.g. using
+[fed-mostlyai-engine](https://github.com/skarrea/fed-mostlyai-engine). The functions are designed to be imported
+into a federated algorithm e.g. [Vantage6](https://vantage6.ai) and cover weight aggregation, serialisation for JSON
+transport, and data preparation utilities.
 
-The code in this repository is available as a Python library here on GitHub or through direct reference with `pip`.
+Additionally, this lightweight library can be used to compose a model using the federated synthetic data generator
+training weights (after it has been trained).
+
+The code is available as a Python library directly from GitHub or via `pip`.
 
 # Structure of the repository
 
 The various functions are organised in different sections, consisting of:
 
--
+src/fed_synthetic_data/ 
+├── federated_training.py # Weight aggregation and JSON serialisation helpers 
+├── utils.py # Data preparation utilities (e.g. column ordering) 
+├── post_training.py # Post-training helpers 
+└── privacy_measures.py # Privacy measurement utilities
+
 
 # Usage
 
@@ -34,30 +43,28 @@ The functions are designed to be modular and can be used independently or in com
 
 ## Including the library in a Vantage6 algorithm
 
-The library can be included in your Vantage6 algorithm by listing it in the `requirements.txt` and `setup.py` file of
-your
-algorithm.
+The library can be included in your Vantage6 algorithm by listing it in the `requirements.txt` and `pyproject.toml`
+(or `setup.py`) of your algorithm.
 
-For the `requirements.txt` file, you can add the following line to the file:
+For the `requirements.txt` file, you can add the following line:
 
 ```
 git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git@v0.1.0
 ```
 
-For the `setup.py` file, you can add the following line to the `install_requires` list:
+For a `setup.py`-based algorithm, add the following to the `install_requires` list:
 
 ```python
         "fed-synthetic-data-generation @ git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git@v0.1.0",
 ```
 
-The algorithm's `setup.py`, particularly the `install_requirements`, section file should then look something like this:
+A minimal `setup.py` for a consuming algorithm might look like:
 
 ```python
 from os import path
 from codecs import open
 from setuptools import setup, find_packages
 
-# We are using a README.md, if you do not have this in your folder, simply replace this with a string.
 here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
@@ -67,14 +74,15 @@ setup(
     description="Fictive Vantage6 algorithm that performs federated synthetic data generator training.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/STRONGAYA/v6-not-an-actual-algorithm",
+    url="https://github.com/your-org/your-algorithm",
     packages=find_packages(),
     python_requires=">=3.10",
     install_requires=[
         "vantage6-algorithm-tools",
         "numpy",
         "pandas",
-        "fed-synthetic-data-generation @ git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git@v0.1.0"
+        "mostlyai-engine>=2.4.0",
+        "fed-synthetic-data-generation @ git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git@v0.1.0",
         # other dependencies
     ]
 )
@@ -85,6 +93,21 @@ setup(
 Example usage of various functions in a central (aggregating) section of a federated algorithm:
 
 ```python
+from fed_synthetic_data.federated_training import (
+    aggregation_model_weights_weighted_average,
+    weights_from_json,
+    weights_to_json,
+)
+
+# results_from_nodes: list of JSON weight payloads + row counts returned by each node
+aggregated_weights = aggregation_model_weights_weighted_average([
+    (weights_from_json(node_result["weights"]), node_result["n_rows"])
+    for node_result in results_from_nodes
+])
+
+# Serialise aggregated weights to send back to nodes
+payload = weights_to_json(aggregated_weights)
+
 
 ```
 
@@ -93,7 +116,15 @@ Example usage of various functions in a central (aggregating) section of a feder
 Example usage of various functions in a node (participating) section of a Vantage6 algorithm:
 
 ```python
+from fed_synthetic_data.federated_training import weights_to_json
+from fed_synthetic_data.utils import sort_columns
 
+# Enforce a consistent column order before training
+df = sort_columns(df, column_order=agreed_column_order)
+
+# After local training, extract and serialise weights for the central node
+weights = model.get_weights()
+return {"weights": weights_to_json(weights), "n_rows": len(df)}
 ```
 
 The various functions are available through `pip install` for debugging and testing purposes.
@@ -116,9 +147,7 @@ tests/
 ├── unit/                                 # Unit tests for individual functions
 │   ├── test_federated_training.py        # Tests for federated training functions
 │   ├── test_privacy_measures.py          # Tests for privacy functions
-│   └── test_utils.py                      # Tests for utility functions 
-├── empirical/                            # Empirical validation tests
-│   └── test_federated_vs_centralised.py  # Federated vs centralised comparisons
+│   └── test_utils.py                     # Tests for utility functions 
 └── utils/                                # Test helper utilities
     └── test_helpers.py                   # Validation and comparison tools
 ```
@@ -158,7 +187,6 @@ pytest -v
 ### Test Categories
 
 - **Unit Tests**: Test individual functions in isolation
-- **Empirical Tests**: Validate federated vs centralised mathematical equivalence
 - **Performance Tests**: Benchmark function performance with large datasets
 - **Edge Case Tests**: Test behaviour with unusual data distributions
 
