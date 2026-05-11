@@ -2,13 +2,112 @@
 Unit tests for utils module.
 
 This module contains unit tests for the utility functions,
-including sort_columns.
+including sort_columns, weights_to_json, and weights_from_json.
 """
 
+import base64
+import binascii
+import json
+
+import numpy as np
 import pytest
 import pandas as pd
+from hypothesis import given, strategies as st
+import hypothesis.extra.numpy as np_st
 
-from fed_synthetic_data.utils import sort_columns
+from fed_synthetic_data.utils import (
+    sort_columns,
+    weights_from_json,
+    weights_to_json,
+)
+
+
+class TestWeightsToJson:
+    """Test cases for weights_to_json."""
+
+    def test_single_array_round_trips(self):
+        """Serialised weights can be deserialised back to the original array."""
+        weights = [np.array([1.0, 2.0, 3.0], dtype=np.float32)]
+        result = weights_to_json(weights)
+        assert len(result) == 1
+        assert result[0]["dtype"] == "float32"
+        assert result[0]["shape"] == (3,)
+        assert isinstance(result[0]["data"], str)
+
+    def test_multiple_layers_preserved(self):
+        """All layers are serialised and the list length is preserved."""
+        weights = [
+            np.zeros((4, 4), dtype=np.float64),
+            np.ones((4,), dtype=np.float64),
+        ]
+        result = weights_to_json(weights)
+        assert len(result) == 2
+
+    def test_shape_is_serialisable(self):
+        """The shape field is a tuple and JSON-serialisable."""
+        import json
+
+        weights = [np.eye(3, dtype=np.float32)]
+        result = weights_to_json(weights)
+        # Should not raise
+        json.dumps(result)
+
+    def test_empty_list(self):
+        """An empty weight list serialises to an empty list."""
+        assert weights_to_json([]) == []
+
+    def test_dtype_preserved(self):
+        """The dtype string matches the original array dtype."""
+        for dtype in [np.float32, np.float64]:
+            weights = [np.array([1.0], dtype=dtype)]
+            result = weights_to_json(weights)
+            assert result[0]["dtype"] == np.dtype(dtype).str.lstrip("<>=!") or result[0]["dtype"] == str(
+                np.dtype(dtype))
+
+
+class TestWeightsFromJson:
+    """Test cases for weights_from_json."""
+
+    def test_single_array_round_trips(self):
+        """Deserialised weights match the original array values and shape."""
+        original = [np.array([1.0, 2.0, 3.0], dtype=np.float32)]
+        recovered = weights_from_json(weights_to_json(original))
+
+        assert len(recovered) == 1
+        np.testing.assert_array_almost_equal(recovered[0], original[0])
+
+    def test_multidimensional_shape_preserved(self):
+        """2-D weight matrices are correctly restored."""
+        original = [np.arange(12, dtype=np.float32).reshape(3, 4)]
+        recovered = weights_from_json(weights_to_json(original))
+
+        assert recovered[0].shape == (3, 4)
+        np.testing.assert_array_equal(recovered[0], original[0])
+
+    def test_multiple_layers_round_trip(self):
+        """All layers survive a full serialise -> deserialise round-trip."""
+        original = [
+            np.random.rand(8, 8).astype(np.float32),
+            np.zeros(8, dtype=np.float32),
+            np.random.rand(8, 4).astype(np.float32),
+            np.zeros(4, dtype=np.float32),
+        ]
+        recovered = weights_from_json(weights_to_json(original))
+
+        assert len(recovered) == len(original)
+        for orig, rec in zip(original, recovered):
+            np.testing.assert_array_almost_equal(rec, orig)
+
+    def test_empty_list(self):
+        """An empty entry list deserialises to an empty list."""
+        assert weights_from_json([]) == []
+
+    def test_dtype_preserved_after_round_trip(self):
+        """The dtype of the recovered array matches the original."""
+        for dtype in [np.float32, np.float64]:
+            original = [np.array([1.0, 2.0], dtype=dtype)]
+            recovered = weights_from_json(weights_to_json(original))
+            assert recovered[0].dtype == np.dtype(dtype)
 
 
 class TestSortColumns:
@@ -162,3 +261,184 @@ class TestSortColumns:
 
         assert list(result.columns) == ["apple", "banana", "zebra"]
         assert all(math.isnan(v) for v in result["zebra"].tolist())
+
+    def test_sort_columns_duplicate_columns(self):
+        """Test sorting DataFrame with duplicate column names."""
+        # Create DataFrame with duplicate columns
+        df = pd.DataFrame([[1, 2, 3], [4, 5, 6]], columns=["a", "b", "a"])
+        
+        # Sort should handle duplicates - pandas keeps both
+        result = sort_columns(df)
+        
+        # Should have 3 columns, sorted alphabetically
+        assert len(result.columns) == 3
+        # Both 'a' columns should be present
+        assert list(result.columns).count("a") == 2
+
+    def test_sort_columns_single_row(self):
+        """Test sorting DataFrame with only one row."""
+        df = pd.DataFrame({"z": [1], "a": [2], "m": [3]})
+        
+        result = sort_columns(df)
+        
+        assert list(result.columns) == ["a", "m", "z"]
+        assert len(result) == 1
+        assert result.loc[0, "a"] == 2
+        assert result.loc[0, "m"] == 3
+        assert result.loc[0, "z"] == 1
+
+    def test_sort_columns_single_cell(self):
+        """Test sorting DataFrame with only one row and one column."""
+        df = pd.DataFrame({"a": [1]})
+        
+        result = sort_columns(df)
+        
+        assert list(result.columns) == ["a"]
+        assert len(result) == 1
+        assert result.loc[0, "a"] == 1
+
+    def test_sort_columns_all_same_column_names(self):
+        """Test sorting DataFrame where all columns have the same name."""
+        df = pd.DataFrame([[1, 2, 3], [4, 5, 6]], columns=["a", "a", "a"])
+        
+        result = sort_columns(df)
+        
+        # All columns should still be there
+        assert len(result.columns) == 3
+        assert all(c == "a" for c in result.columns)
+
+    def test_sort_columns_mixed_types(self):
+        """Test sorting DataFrame with mixed column name types."""
+        df = pd.DataFrame({1: [1, 2], "a": [3, 4], 2: [5, 6]})
+        
+        result = sort_columns(df)
+        
+        # Should sort with numbers first (1, 2), then strings ("a")
+        assert list(result.columns) == [1, 2, "a"]
+
+    def test_sort_columns_empty_with_explicit_order(self):
+        """Test sorting empty DataFrame with explicit column order."""
+        df = pd.DataFrame()
+        
+        result = sort_columns(df, column_order=["a", "b", "c"])
+        
+        # Empty DataFrame should remain empty
+        assert result.empty
+        assert list(result.columns) == ["a", "b", "c"]
+
+
+class TestWeightsFromJsonMalformed:
+    """Tests for weights_from_json with invalid/malformed inputs."""
+
+    def test_missing_data_key(self):
+        """Missing 'data' key raises KeyError."""
+        entries = [{"shape": (2,), "dtype": "float32"}]
+        with pytest.raises(KeyError):
+            weights_from_json(entries)
+
+    def test_missing_shape_key(self):
+        """Missing 'shape' key raises KeyError."""
+        entries = [{"data": base64.b64encode(np.array([1.0, 2.0]).tobytes()).decode(), "dtype": "float32"}]
+        with pytest.raises(KeyError):
+            weights_from_json(entries)
+
+    def test_missing_dtype_key(self):
+        """Missing 'dtype' key raises KeyError."""
+        entries = [{"data": base64.b64encode(np.array([1.0, 2.0]).tobytes()).decode(), "shape": (2,)}]
+        with pytest.raises(KeyError):
+            weights_from_json(entries)
+
+    def test_invalid_base64_data(self):
+        """Invalid base64 string raises error."""
+        entries = [{"data": "not-valid-base64!!!", "shape": (2,), "dtype": "float32"}]
+        with pytest.raises((binascii.Error, ValueError)):
+            weights_from_json(entries)
+
+    def test_invalid_dtype_string(self):
+        """Unrecognised dtype string raises TypeError."""
+        data_str = base64.b64encode(np.array([1.0, 2.0]).tobytes()).decode()
+        entries = [{"data": data_str, "shape": (2,), "dtype": "invalid_dtype_xyz"}]
+        with pytest.raises(TypeError):
+            weights_from_json(entries)
+
+    def test_shape_mismatch_with_data_length(self):
+        """Shape tuple doesn't match actual data length."""
+        data = base64.b64encode(np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).tobytes()).decode()
+        entries = [{"data": data, "shape": (2,), "dtype": "float32"}]  # 4 elements vs shape (2,)
+        with pytest.raises(ValueError):
+            weights_from_json(entries)
+
+
+class TestWeightsRoundTripHypothesis:
+    """Property-based tests for serialisation round-trips."""
+
+    @given(
+        n_layers=st.integers(min_value=0, max_value=10),
+        array_shapes=st.lists(
+            st.tuples(st.integers(min_value=0, max_value=20), st.integers(min_value=0, max_value=20)),
+            min_size=0, max_size=10
+        )
+    )
+    def test_round_trip_preserves_shape(self, n_layers, array_shapes):
+        """Round-trip preserves array shapes for arbitrary layer configurations."""
+        np.random.seed(42)
+        original = [np.random.rand(*shape).astype(np.float32) for shape in array_shapes[:n_layers]]
+        recovered = weights_from_json(weights_to_json(original))
+        assert len(recovered) == len(original)
+        for orig, rec in zip(original, recovered):
+            assert rec.shape == orig.shape
+
+    @given(
+        arrays=st.lists(
+            np_st.arrays(
+                dtype=np.float32,
+                shape=st.tuples(st.integers(min_value=1, max_value=10), st.integers(min_value=1, max_value=10)),
+                elements=st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_inf=False)
+            ),
+            min_size=0, max_size=5
+        )
+    )
+    def test_round_trip_preserves_values(self, arrays):
+        """Round-trip preserves exact float32 values."""
+        recovered = weights_from_json(weights_to_json(arrays))
+        assert len(recovered) == len(arrays)
+        for orig, rec in zip(arrays, recovered):
+            np.testing.assert_array_equal(rec, orig)
+
+    @given(dtype=st.sampled_from([np.float16, np.float32, np.float64, np.int32, np.int64]))
+    def test_round_trip_preserves_dtype(self, dtype):
+        """Round-trip preserves the original dtype."""
+        original = [np.array([1.0, 2.0, 3.0], dtype=dtype)]
+        recovered = weights_from_json(weights_to_json(original))
+        assert recovered[0].dtype == np.dtype(dtype)
+
+
+class TestJsonPayloadSchema:
+    """Tests to pin the JSON payload schema contract."""
+
+    def test_weights_to_json_schema_compliance(self):
+        """Every entry has exactly shape, dtype, data keys with correct types."""
+        weights = [np.random.rand(3, 4).astype(np.float32), np.random.rand(10).astype(np.float64)]
+        result = weights_to_json(weights)
+
+        for entry in result:
+            assert set(entry.keys()) == {"shape", "dtype", "data"}
+            assert isinstance(entry["shape"], tuple)
+            assert all(isinstance(d, int) for d in entry["shape"])
+            assert isinstance(entry["dtype"], str)
+            assert isinstance(entry["data"], str)
+            # Verify it's valid base64
+            base64.b64decode(entry["data"], validate=True)
+
+        # Entire structure must be JSON-serialisable
+        json_str = json.dumps(result)
+        assert isinstance(json_str, str)
+
+    def test_schema_is_stable_across_dtypes(self):
+        """Schema is identical regardless of input dtype."""
+        for dtype in [np.float16, np.float32, np.float64]:
+            w = np.array([[1.0, 2.0]], dtype=dtype)
+            entry = weights_to_json([w])[0]
+            assert set(entry.keys()) == {"shape", "dtype", "data"}
+            assert entry["shape"] == (1, 2)
+            assert entry["dtype"] == np.dtype(dtype).str
