@@ -61,8 +61,9 @@ class TestWeightsToJson:
         for dtype in [np.float32, np.float64]:
             weights = [np.array([1.0], dtype=dtype)]
             result = weights_to_json(weights)
-            assert result[0]["dtype"] == np.dtype(dtype).str.lstrip("<>=!") or result[0]["dtype"] == str(
-                np.dtype(dtype))
+            assert result[0]["dtype"] == np.dtype(dtype).str.lstrip("<>=!") or result[0][
+                "dtype"
+            ] == str(np.dtype(dtype))
 
 
 class TestWeightsFromJson:
@@ -266,10 +267,10 @@ class TestSortColumns:
         """Test sorting DataFrame with duplicate column names."""
         # Create DataFrame with duplicate columns
         df = pd.DataFrame([[1, 2, 3], [4, 5, 6]], columns=["a", "b", "a"])
-        
+
         # Sort should handle duplicates - pandas keeps both
         result = sort_columns(df)
-        
+
         # Should have 3 columns, sorted alphabetically
         assert len(result.columns) == 3
         # Both 'a' columns should be present
@@ -278,9 +279,9 @@ class TestSortColumns:
     def test_sort_columns_single_row(self):
         """Test sorting DataFrame with only one row."""
         df = pd.DataFrame({"z": [1], "a": [2], "m": [3]})
-        
+
         result = sort_columns(df)
-        
+
         assert list(result.columns) == ["a", "m", "z"]
         assert len(result) == 1
         assert result.loc[0, "a"] == 2
@@ -290,9 +291,9 @@ class TestSortColumns:
     def test_sort_columns_single_cell(self):
         """Test sorting DataFrame with only one row and one column."""
         df = pd.DataFrame({"a": [1]})
-        
+
         result = sort_columns(df)
-        
+
         assert list(result.columns) == ["a"]
         assert len(result) == 1
         assert result.loc[0, "a"] == 1
@@ -300,9 +301,9 @@ class TestSortColumns:
     def test_sort_columns_all_same_column_names(self):
         """Test sorting DataFrame where all columns have the same name."""
         df = pd.DataFrame([[1, 2, 3], [4, 5, 6]], columns=["a", "a", "a"])
-        
+
         result = sort_columns(df)
-        
+
         # All columns should still be there
         assert len(result.columns) == 3
         assert all(c == "a" for c in result.columns)
@@ -310,18 +311,18 @@ class TestSortColumns:
     def test_sort_columns_mixed_types(self):
         """Test sorting DataFrame with mixed column name types."""
         df = pd.DataFrame({1: [1, 2], "a": [3, 4], 2: [5, 6]})
-        
+
         result = sort_columns(df)
-        
+
         # Should sort with numbers first (1, 2), then strings ("a")
         assert list(result.columns) == [1, 2, "a"]
 
     def test_sort_columns_empty_with_explicit_order(self):
         """Test sorting empty DataFrame with explicit column order."""
         df = pd.DataFrame()
-        
+
         result = sort_columns(df, column_order=["a", "b", "c"])
-        
+
         # Empty DataFrame should remain empty
         assert result.empty
         assert list(result.columns) == ["a", "b", "c"]
@@ -338,13 +339,17 @@ class TestWeightsFromJsonMalformed:
 
     def test_missing_shape_key(self):
         """Missing 'shape' key raises KeyError."""
-        entries = [{"data": base64.b64encode(np.array([1.0, 2.0]).tobytes()).decode(), "dtype": "float32"}]
+        entries = [
+            {"data": base64.b64encode(np.array([1.0, 2.0]).tobytes()).decode(), "dtype": "float32"}
+        ]
         with pytest.raises(KeyError):
             weights_from_json(entries)
 
     def test_missing_dtype_key(self):
         """Missing 'dtype' key raises KeyError."""
-        entries = [{"data": base64.b64encode(np.array([1.0, 2.0]).tobytes()).decode(), "shape": (2,)}]
+        entries = [
+            {"data": base64.b64encode(np.array([1.0, 2.0]).tobytes()).decode(), "shape": (2,)}
+        ]
         with pytest.raises(KeyError):
             weights_from_json(entries)
 
@@ -375,9 +380,12 @@ class TestWeightsRoundTripHypothesis:
     @given(
         n_layers=st.integers(min_value=0, max_value=10),
         array_shapes=st.lists(
-            st.tuples(st.integers(min_value=0, max_value=20), st.integers(min_value=0, max_value=20)),
-            min_size=0, max_size=10
-        )
+            st.tuples(
+                st.integers(min_value=0, max_value=20), st.integers(min_value=0, max_value=20)
+            ),
+            min_size=0,
+            max_size=10,
+        ),
     )
     def test_round_trip_preserves_shape(self, n_layers, array_shapes):
         """Round-trip preserves array shapes for arbitrary layer configurations."""
@@ -392,10 +400,15 @@ class TestWeightsRoundTripHypothesis:
         arrays=st.lists(
             np_st.arrays(
                 dtype=np.float32,
-                shape=st.tuples(st.integers(min_value=1, max_value=10), st.integers(min_value=1, max_value=10)),
-                elements=st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False)
+                shape=st.tuples(
+                    st.integers(min_value=1, max_value=10), st.integers(min_value=1, max_value=10)
+                ),
+                elements=st.floats(
+                    min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False
+                ),
             ),
-            min_size=0, max_size=5
+            min_size=0,
+            max_size=5,
         )
     )
     def test_round_trip_preserves_values(self, arrays):

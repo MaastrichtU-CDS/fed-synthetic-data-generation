@@ -11,7 +11,7 @@ import pytest
 from fed_synthetic_data.federated_training import (
     aggregation_model_weights_weighted_average,
     evaluate_loss,
-    should_stop_early
+    should_stop_early,
 )
 
 
@@ -107,8 +107,7 @@ class TestAggregationModelWeightsWeightedAverage:
         aggregated = aggregation_model_weights_weighted_average(results)
 
         np.testing.assert_array_almost_equal(
-            aggregated[0],
-            np.array([-2.0, -3.0], dtype=np.float32)
+            aggregated[0], np.array([-2.0, -3.0], dtype=np.float32)
         )
 
     def test_very_large_weights(self):
@@ -119,8 +118,7 @@ class TestAggregationModelWeightsWeightedAverage:
         aggregated = aggregation_model_weights_weighted_average(results)
 
         np.testing.assert_array_almost_equal(
-            aggregated[0],
-            np.array([1.5e30, 1.5e30], dtype=np.float64)
+            aggregated[0], np.array([1.5e30, 1.5e30], dtype=np.float64)
         )
 
     def test_very_small_weights(self):
@@ -131,8 +129,7 @@ class TestAggregationModelWeightsWeightedAverage:
         aggregated = aggregation_model_weights_weighted_average(results)
 
         np.testing.assert_array_almost_equal(
-            aggregated[0],
-            np.array([1.5e-30, 1.5e-30], dtype=np.float64)
+            aggregated[0], np.array([1.5e-30, 1.5e-30], dtype=np.float64)
         )
 
     def test_mixed_positive_negative_weights(self):
@@ -142,10 +139,7 @@ class TestAggregationModelWeightsWeightedAverage:
         results = [(w1, 1), (w2, 1)]
         aggregated = aggregation_model_weights_weighted_average(results)
 
-        np.testing.assert_array_almost_equal(
-            aggregated[0],
-            np.array([1.0, -1.0], dtype=np.float32)
-        )
+        np.testing.assert_array_almost_equal(aggregated[0], np.array([1.0, -1.0], dtype=np.float32))
 
 
 class TestEvaluateLoss:
@@ -245,7 +239,7 @@ class TestAggregationModelWeightsWeightedAverageShape:
     def test_shape_mismatch_within_layer(self):
         """Same number of layers but different shapes within a layer raises ValueError."""
         w1 = [np.array([[1.0, 2.0], [3.0, 4.0]])]  # shape (2, 2)
-        w2 = [np.array([[1.0, 2.0, 3.0]])]          # shape (1, 3)
+        w2 = [np.array([[1.0, 2.0, 3.0]])]  # shape (1, 3)
         results = [(w1, 10), (w2, 10)]
         with pytest.raises(ValueError):
             aggregation_model_weights_weighted_average(results)

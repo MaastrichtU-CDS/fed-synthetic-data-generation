@@ -19,9 +19,9 @@ class ModelProtocol(Protocol):
 
 
 def load_weights_into_model(
-        model: ModelProtocol,
-        deserialised_weights: list[Any],
-        parameter_names: list[str],
+    model: ModelProtocol,
+    deserialised_weights: list[Any],
+    parameter_names: list[str],
 ) -> ModelProtocol:
     """
     Load deserialised weights into a model.
@@ -38,7 +38,9 @@ def load_weights_into_model(
         ValueError: If length or shape mismatch.
     """
     if len(deserialised_weights) != len(parameter_names):
-        raise ValueError(f"Mismatch: {len(deserialised_weights)} weights vs {len(parameter_names)} names")
+        raise ValueError(
+            f"Mismatch: {len(deserialised_weights)} weights vs {len(parameter_names)} names"
+        )
 
     state_dict = {name: weight for name, weight in zip(parameter_names, deserialised_weights)}
     model.load_state_dict(state_dict)
@@ -46,9 +48,9 @@ def load_weights_into_model(
 
 
 def load_model_from_json_weights(
-        model: ModelProtocol,
-        serialized_weights: list[dict],
-        parameter_names: list[str],
+    model: ModelProtocol,
+    serialized_weights: list[dict],
+    parameter_names: list[str],
 ) -> ModelProtocol:
     """
     Load JSON-serialised weights into a model.
@@ -81,6 +83,7 @@ def save_model(model: ModelProtocol, path: str, **kwargs) -> None:
     """
     try:
         import torch
+
         torch.save(model.state_dict(), path, **kwargs)
     except ImportError:
         raise NotImplementedError("Model saving requires PyTorch or a registered backend")

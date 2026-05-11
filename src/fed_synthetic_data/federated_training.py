@@ -11,7 +11,9 @@ import numpy as np
 from functools import reduce
 
 
-def aggregation_model_weights_weighted_average(results: list[tuple[list[np.ndarray], int]]) -> list[np.ndarray]:
+def aggregation_model_weights_weighted_average(
+    results: list[tuple[list[np.ndarray], int]],
+) -> list[np.ndarray]:
     """
     Compute weighted average of model parameters.
 
@@ -26,10 +28,7 @@ def aggregation_model_weights_weighted_average(results: list[tuple[list[np.ndarr
         list[np.ndarray]: The aggregated model weights.
     """
     num_examples_total = sum(n for (_, n) in results)
-    weighted_weights = [
-        [layer * n for layer in weights]
-        for weights, n in results
-    ]
+    weighted_weights = [[layer * n for layer in weights] for weights, n in results]
     return [
         reduce(np.add, layer_updates) / num_examples_total
         for layer_updates in zip(*weighted_weights, strict=True)
@@ -65,9 +64,9 @@ def evaluate_loss(loss_results: list[dict]) -> float:
 
 
 def should_stop_early(
-        loss_history: list[float],
-        patience: int = 5,
-        min_delta: float = 1e-4,
+    loss_history: list[float],
+    patience: int = 5,
+    min_delta: float = 1e-4,
 ) -> bool:
     """
     Decide whether federated training should stop early based on loss history.

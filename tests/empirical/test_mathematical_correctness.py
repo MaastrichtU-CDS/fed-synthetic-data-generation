@@ -26,16 +26,15 @@ class TestAggregationMathematics:
         # Equal samples: (1+3)/2 = 2.0, (2+4)/2 = 3.0
         w1 = [np.array([1.0, 2.0], dtype=np.float32)]
         w2 = [np.array([3.0, 4.0], dtype=np.float32)]
-        
-        result = aggregation_model_weights_weighted_average([
-            (w1, 100),
-            (w2, 100),
-        ])
-        
-        np.testing.assert_array_almost_equal(
-            result[0],
-            np.array([2.0, 3.0], dtype=np.float32)
+
+        result = aggregation_model_weights_weighted_average(
+            [
+                (w1, 100),
+                (w2, 100),
+            ]
         )
+
+        np.testing.assert_array_almost_equal(result[0], np.array([2.0, 3.0], dtype=np.float32))
 
     def test_weighted_average_unequal_samples(self):
         """Verify weighted average with unequal sample counts."""
@@ -45,16 +44,15 @@ class TestAggregationMathematics:
         #              (2*1 + 4*3)/4 = 14/4 = 3.5
         w1 = [np.array([1.0, 2.0], dtype=np.float32)]
         w2 = [np.array([3.0, 4.0], dtype=np.float32)]
-        
-        result = aggregation_model_weights_weighted_average([
-            (w1, 1),
-            (w2, 3),
-        ])
-        
-        np.testing.assert_array_almost_equal(
-            result[0],
-            np.array([2.5, 3.5], dtype=np.float32)
+
+        result = aggregation_model_weights_weighted_average(
+            [
+                (w1, 1),
+                (w2, 3),
+            ]
         )
+
+        np.testing.assert_array_almost_equal(result[0], np.array([2.5, 3.5], dtype=np.float32))
 
     def test_multilayer_weighted_average(self):
         """Verify weighted average across multiple weight layers."""
@@ -64,33 +62,37 @@ class TestAggregationMathematics:
         # Layer 2: (2*2 + 4*8)/10 = 36/10 = 3.6
         w1 = [np.array([1.0], dtype=np.float32), np.array([2.0], dtype=np.float32)]
         w2 = [np.array([3.0], dtype=np.float32), np.array([4.0], dtype=np.float32)]
-        
-        result = aggregation_model_weights_weighted_average([
-            (w1, 2),
-            (w2, 8),
-        ])
-        
+
+        result = aggregation_model_weights_weighted_average(
+            [
+                (w1, 2),
+                (w2, 8),
+            ]
+        )
+
         np.testing.assert_array_almost_equal(result[0], np.array([2.6], dtype=np.float32))
         np.testing.assert_array_almost_equal(result[1], np.array([3.6], dtype=np.float32))
 
     def test_single_node_returns_unchanged(self):
         """Single node's weights should be returned unchanged."""
         w = [np.array([5.0, 6.0, 7.0], dtype=np.float32)]
-        
+
         result = aggregation_model_weights_weighted_average([(w, 42)])
-        
+
         np.testing.assert_array_almost_equal(result[0], w[0])
 
     def test_zero_weight_node_ignored(self):
         """Node with zero samples should not affect the average."""
         w1 = [np.array([10.0, 20.0], dtype=np.float32)]
         w2 = [np.array([0.0, 0.0], dtype=np.float32)]  # Should be ignored
-        
-        result = aggregation_model_weights_weighted_average([
-            (w1, 100),
-            (w2, 0),
-        ])
-        
+
+        result = aggregation_model_weights_weighted_average(
+            [
+                (w1, 100),
+                (w2, 0),
+            ]
+        )
+
         # Result should equal w1 since w2 has 0 samples
         np.testing.assert_array_almost_equal(result[0], w1[0])
 
@@ -102,12 +104,14 @@ class TestAggregationMathematics:
         # Average: [[3, 4], [5, 6]]
         w1 = [np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)]
         w2 = [np.array([[5.0, 6.0], [7.0, 8.0]], dtype=np.float32)]
-        
-        result = aggregation_model_weights_weighted_average([
-            (w1, 1),
-            (w2, 1),
-        ])
-        
+
+        result = aggregation_model_weights_weighted_average(
+            [
+                (w1, 1),
+                (w2, 1),
+            ]
+        )
+
         expected = np.array([[3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
         np.testing.assert_array_almost_equal(result[0], expected)
 
@@ -116,12 +120,14 @@ class TestAggregationMathematics:
         for dtype in [np.float32, np.float64]:
             w1 = [np.array([1.0, 2.0], dtype=dtype)]
             w2 = [np.array([3.0, 4.0], dtype=dtype)]
-            
-            result = aggregation_model_weights_weighted_average([
-                (w1, 1),
-                (w2, 1),
-            ])
-            
+
+            result = aggregation_model_weights_weighted_average(
+                [
+                    (w1, 1),
+                    (w2, 1),
+                ]
+            )
+
             assert result[0].dtype == dtype
 
     def test_multiple_nodes_with_various_weights(self):
@@ -134,11 +140,11 @@ class TestAggregationMathematics:
             ([np.array([4.0], dtype=np.float32)], 40),
             ([np.array([5.0], dtype=np.float32)], 50),
         ]
-        
+
         # Expected: (1*10 + 2*20 + 3*30 + 4*40 + 5*50) / 150
         # = (10 + 40 + 90 + 160 + 250) / 150 = 550 / 150 = 3.666...
         result = aggregation_model_weights_weighted_average(weights_and_samples)
-        
+
         expected = 550.0 / 150.0
         np.testing.assert_almost_equal(result[0][0], expected, decimal=5)
 
@@ -152,10 +158,10 @@ class TestSerialisationFidelity:
             np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float32),
             np.array([-1.5, 0.0, 1.5], dtype=np.float64),
         ]
-        
+
         serialized = weights_to_json(original)
         recovered = weights_from_json(serialized)
-        
+
         for orig, rec in zip(original, recovered):
             np.testing.assert_array_equal(orig, rec)
 
@@ -174,7 +180,7 @@ class TestSerialisationFidelity:
             (2, 3, 4),
             (2, 2, 2, 2),
         ]
-        
+
         for shape in shapes:
             original = [np.random.rand(*shape).astype(np.float32)]
             recovered = weights_from_json(weights_to_json(original))
@@ -212,20 +218,20 @@ class TestSerialisationFidelity:
         """Serialised format is consistent and complete."""
         weights = [np.array([1.0, 2.0], dtype=np.float32)]
         serialized = weights_to_json(weights)
-        
+
         assert len(serialized) == 1
         entry = serialized[0]
-        
+
         # Check all required fields are present
         assert "shape" in entry
         assert "dtype" in entry
         assert "data" in entry
-        
+
         # Check field types
         assert isinstance(entry["shape"], tuple)
         assert isinstance(entry["dtype"], str)
         assert isinstance(entry["data"], str)
-        
+
         # Check shape is correct
         assert entry["shape"] == (2,)
         assert entry["dtype"] == "float32"
@@ -273,16 +279,10 @@ class TestPyTorchTensorCompatibility:
         assert len(recovered) == 2
         assert isinstance(recovered[0], np.ndarray)
         assert isinstance(recovered[1], np.ndarray)
-        
+
         # Values should match
-        np.testing.assert_array_almost_equal(
-            recovered[0],
-            pytorch_weights[0].numpy()
-        )
-        np.testing.assert_array_almost_equal(
-            recovered[1],
-            pytorch_weights[1].numpy()
-        )
+        np.testing.assert_array_almost_equal(recovered[0], pytorch_weights[0].numpy())
+        np.testing.assert_array_almost_equal(recovered[1], pytorch_weights[1].numpy())
 
     def test_aggregation_with_pytorch_tensors(self):
         """Aggregation works with PyTorch tensors as input."""
@@ -299,25 +299,21 @@ class TestPyTorchTensorCompatibility:
         ]
 
         # Aggregate (should work with PyTorch tensors)
-        result = aggregation_model_weights_weighted_average([
-            (node1_weights, 100),
-            (node2_weights, 100),
-        ])
+        result = aggregation_model_weights_weighted_average(
+            [
+                (node1_weights, 100),
+                (node2_weights, 100),
+            ]
+        )
 
         # Result should be numpy arrays (from the aggregation function)
         assert len(result) == 2
         assert isinstance(result[0], np.ndarray)
         assert isinstance(result[1], np.ndarray)
-        
+
         # Values should be correct
-        np.testing.assert_array_almost_equal(
-            result[0],
-            np.array([2.0, 3.0], dtype=np.float32)
-        )
-        np.testing.assert_array_almost_equal(
-            result[1],
-            np.array([0.15], dtype=np.float32)
-        )
+        np.testing.assert_array_almost_equal(result[0], np.array([2.0, 3.0], dtype=np.float32))
+        np.testing.assert_array_almost_equal(result[1], np.array([0.15], dtype=np.float32))
 
     def test_full_pytorch_tensor_workflow(self):
         """Complete workflow: PyTorch tensors -> aggregate -> serialise -> deserialize."""
@@ -334,10 +330,12 @@ class TestPyTorchTensorCompatibility:
         ]
 
         # Step 1: Aggregate (with PyTorch tensors directly)
-        aggregated = aggregation_model_weights_weighted_average([
-            (node1_weights, 100),
-            (node2_weights, 100),
-        ])
+        aggregated = aggregation_model_weights_weighted_average(
+            [
+                (node1_weights, 100),
+                (node2_weights, 100),
+            ]
+        )
 
         # Step 2: Serialise
         serialized = weights_to_json(aggregated)

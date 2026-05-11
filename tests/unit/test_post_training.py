@@ -18,21 +18,21 @@ from fed_synthetic_data.post_training import (
     save_model_weights,
 )
 
-
 # =============================================================================
 # Mock Model for Testing
 # =============================================================================
 
+
 class MockModel:
     """Mock model implementing ModelProtocol for unit testing."""
-    
+
     def __init__(self):
         self.state_dict_data = {}
         self.loaded_state_dict = None
-    
+
     def state_dict(self) -> dict:
         return self.state_dict_data
-    
+
     def load_state_dict(self, state_dict: dict) -> None:
         self.loaded_state_dict = state_dict
         self.state_dict_data.update(state_dict)
@@ -42,6 +42,7 @@ class MockModel:
 # Unit Tests for load_weights_into_model
 # =============================================================================
 
+
 class TestLoadWeightsIntoModel:
     """Unit tests for load_weights_into_model."""
 
@@ -50,9 +51,9 @@ class TestLoadWeightsIntoModel:
         model = MockModel()
         weights = [np.array([1.0, 2.0, 3.0], dtype=np.float32)]
         parameter_names = ["layer1.weights"]
-        
+
         result = load_weights_into_model(model, weights, parameter_names)
-        
+
         assert result is model
         assert model.loaded_state_dict == {"layer1.weights": weights[0]}
 
@@ -64,9 +65,9 @@ class TestLoadWeightsIntoModel:
             np.array([3.0, 4.0, 5.0], dtype=np.float32),
         ]
         parameter_names = ["layer1.weights", "layer2.weights"]
-        
+
         load_weights_into_model(model, weights, parameter_names)
-        
+
         assert "layer1.weights" in model.loaded_state_dict
         assert "layer2.weights" in model.loaded_state_dict
 
@@ -75,7 +76,7 @@ class TestLoadWeightsIntoModel:
         model = MockModel()
         weights = [np.array([1.0, 2.0])]
         parameter_names = ["layer1", "layer2"]
-        
+
         with pytest.raises(ValueError, match="Mismatch: 1 weights vs 2 names"):
             load_weights_into_model(model, weights, parameter_names)
 
@@ -100,22 +101,21 @@ class TestLoadWeightsIntoModel:
             np.eye(3, dtype=np.float32),
         ]
         parameter_names = ["conv1.weights", "conv2.weights"]
-        
+
         load_weights_into_model(model, weights, parameter_names)
-        
+
         np.testing.assert_array_equal(
-            model.loaded_state_dict["conv1.weights"],
-            np.arange(12, dtype=np.float32).reshape(3, 4)
+            model.loaded_state_dict["conv1.weights"], np.arange(12, dtype=np.float32).reshape(3, 4)
         )
         np.testing.assert_array_equal(
-            model.loaded_state_dict["conv2.weights"],
-            np.eye(3, dtype=np.float32)
+            model.loaded_state_dict["conv2.weights"], np.eye(3, dtype=np.float32)
         )
 
 
 # =============================================================================
 # Unit Tests for load_model_from_json_weights
 # =============================================================================
+
 
 class TestLoadModelFromJsonWeights:
     """Unit tests for load_model_from_json_weights."""
@@ -127,8 +127,10 @@ class TestLoadModelFromJsonWeights:
         parameter_names = ["layer"]
         mock_deserialized = [np.array([1.0, 2.0, 3.0], dtype=np.float32)]
 
-        with patch("fed_synthetic_data.post_training.weights_from_json") as mock_wfj, \
-             patch("fed_synthetic_data.post_training.load_weights_into_model") as mock_lwim:
+        with (
+            patch("fed_synthetic_data.post_training.weights_from_json") as mock_wfj,
+            patch("fed_synthetic_data.post_training.load_weights_into_model") as mock_lwim,
+        ):
 
             mock_wfj.return_value = mock_deserialized
             mock_lwim.return_value = model
@@ -143,8 +145,10 @@ class TestLoadModelFromJsonWeights:
         """Handles empty serialized weights list."""
         model = MockModel()
 
-        with patch("fed_synthetic_data.post_training.weights_from_json") as mock_wfj, \
-             patch("fed_synthetic_data.post_training.load_weights_into_model") as mock_lwim:
+        with (
+            patch("fed_synthetic_data.post_training.weights_from_json") as mock_wfj,
+            patch("fed_synthetic_data.post_training.load_weights_into_model") as mock_lwim,
+        ):
 
             mock_wfj.return_value = []
             mock_lwim.return_value = model
@@ -160,6 +164,7 @@ class TestLoadModelFromJsonWeights:
 # Unit Tests for save_model and save_model_weights
 # =============================================================================
 
+
 class TestSaveModel:
     """Unit tests for save_model and save_model_weights."""
 
@@ -171,7 +176,7 @@ class TestSaveModel:
         with patch("fed_synthetic_data.post_training.torch") as mock_torch:
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 temp_path = f.name
-            
+
             try:
                 save_model(model, temp_path)
                 mock_torch.save.assert_called_once()
@@ -186,7 +191,7 @@ class TestSaveModel:
         with patch("fed_synthetic_data.post_training.save_model") as mock_save:
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 temp_path = f.name
-            
+
             try:
                 save_model_weights(model, temp_path)
                 mock_save.assert_called_once_with(model, temp_path)
@@ -201,7 +206,7 @@ class TestSaveModel:
         with patch("fed_synthetic_data.post_training.torch", new=None):
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 temp_path = f.name
-            
+
             try:
                 with pytest.raises(NotImplementedError, match="PyTorch or a registered backend"):
                     save_model(model, temp_path)
@@ -216,9 +221,11 @@ class TestSaveModel:
 
         with patch("fed_synthetic_data.post_training.torch") as mock_torch:
             # Create a path to a non-existent directory
-            non_existent_dir = os.path.join(tempfile.gettempdir(), "non_existent_dir_" + str(os.getpid()))
+            non_existent_dir = os.path.join(
+                tempfile.gettempdir(), "non_existent_dir_" + str(os.getpid())
+            )
             path = os.path.join(non_existent_dir, "model.pt")
-            
+
             # torch.save should be called, which will fail if directory doesn't exist
             with pytest.raises((FileNotFoundError, OSError)):
                 save_model(model, path)
@@ -232,9 +239,9 @@ class TestSaveModel:
             with tempfile.TemporaryDirectory() as tmpdir:
                 # Use special characters in filename
                 special_path = os.path.join(tmpdir, "model_with_spaces and-dashes.pt")
-                
+
                 save_model(model, special_path)
-                
+
                 mock_torch.save.assert_called_once()
                 # Verify the path was passed correctly
                 call_args = mock_torch.save.call_args
@@ -248,7 +255,7 @@ class TestSaveModel:
         with patch("fed_synthetic_data.post_training.torch") as mock_torch:
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 temp_path = f.name
-            
+
             try:
                 save_model(model, temp_path)
                 mock_torch.save.assert_called_once_with({}, temp_path, **{})
@@ -261,23 +268,27 @@ class TestSaveModel:
         model = MockModel()
 
         with patch("fed_synthetic_data.post_training.save_model") as mock_save:
-            non_existent_dir = os.path.join(tempfile.gettempdir(), "non_existent_" + str(os.getpid()))
+            non_existent_dir = os.path.join(
+                tempfile.gettempdir(), "non_existent_" + str(os.getpid())
+            )
             path = os.path.join(non_existent_dir, "weights.pt")
-            
+
             with pytest.raises((FileNotFoundError, OSError)):
                 save_model_weights(model, path)
-            
+
             # Verify save_model was called
             mock_save.assert_called_once_with(model, path)
 
     def test_load_from_nonexistent_file_error(self):
         """Loading from non-existent file raises appropriate error."""
         model = MockModel()
-        
+
         # Try to load weights from non-existent file
         # This would normally be done via torch.load, but we're testing the flow
-        non_existent_path = os.path.join(tempfile.gettempdir(), "nonexistent_" + str(os.getpid()) + ".pt")
-        
+        non_existent_path = os.path.join(
+            tempfile.gettempdir(), "nonexistent_" + str(os.getpid()) + ".pt"
+        )
+
         # The error would come from torch.load, but our functions don't directly handle file loading
         # This is more of a documentation that the error comes from the underlying framework
         assert not os.path.exists(non_existent_path)
@@ -290,10 +301,10 @@ class TestSaveModel:
         with patch("fed_synthetic_data.post_training.torch") as mock_torch:
             with tempfile.NamedTemporaryFile(delete=False) as f:
                 temp_path = f.name
-            
+
             try:
                 save_model(model, temp_path, pickle_protocol=2)
-                
+
                 # Verify kwargs were passed
                 call_args = mock_torch.save.call_args
                 assert call_args[1].get("pickle_protocol") == 2
