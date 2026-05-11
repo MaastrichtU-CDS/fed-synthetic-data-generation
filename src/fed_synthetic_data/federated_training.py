@@ -6,7 +6,6 @@ of synthetic data generators across multiple nodes. These are intended to be
 imported into a vantage6 algorithm.
 """
 
-import base64
 import numpy as np
 
 from functools import reduce
@@ -37,46 +36,59 @@ def aggregation_model_weights_weighted_average(results: list[tuple[list[np.ndarr
     ]
 
 
-def weights_to_json(weights: list[np.ndarray]) -> list[dict]:
+def evaluate_loss(loss_results: list[dict]) -> float:
     """
-    Serialise model weights for JSON transport.
+    Compute the weighted average loss across federated sites.
+
+    Each site reports its loss together with the number of samples it was evaluated on.
+    The aggregate loss is the sample-weighted average, which matches how the model weights are aggregated.
 
     Args:
-        weights (list[np.ndarray]): List of model weights to serialise.
+        loss_results (list[dict]): Per-site results, each containing:
+            - "loss": float - The loss value for this site.
+            - "samples": int - Number of samples evaluated at this site.
 
     Returns:
-        list[dict]: List of dictionaries representing the weights in JSON-serialisable format.
+        float: The sample-weighted average loss across all sites.
+
+    Raises:
+        ValueError: If 'loss_results' is empty or if the 'total samples' is zero.
     """
-    return [
-        {"shape": w.shape, "dtype": str(w.dtype), "data": base64.b64encode(w.tobytes()).decode()}
-        for w in weights
-    ]
+    if not loss_results:
+        raise ValueError("loss_results cannot be empty")
+
+    total_samples = sum(r["samples"] for r in loss_results)
+    if total_samples == 0:
+        raise ValueError("total number of samples must be greater than zero")
+
+    return sum(r["loss"] * r["samples"] for r in loss_results) / total_samples
 
 
-def weights_from_json(entries: list[dict]) -> list[np.ndarray]:
+def should_stop_early(
+        loss_history: list[float],
+        patience: int = 5,
+        min_delta: float = 1e-4,
+) -> bool:
     """
-    Deserialise model weights from JSON transport format.
+    Decide whether federated training should stop early based on loss history.
 
-    Each dictionary must contain:
-        - "data": Base64-encoded weight data as a string.
-        - "dtype": A string representing the data type of the weight.
-        - "shape": A tuple (or list) representing the shape of the weight array.
+    Returns True when the best loss seen has not improved by at least 'min_delta' for the last 'patience' iterations.
+    The caller is responsible for maintaining the history
+    (e.g. by appending the result of :func: 'evaluate_loss' after each round).
 
     Args:
-        entries (list[dict]): List of serialised weight dictionaries.
+        loss_history (list[float]): Aggregate loss per iteration, in order.
+        patience (int): Number of iterations without improvement to tolerate
+            before stopping. Defaults to 5.
+        min_delta (float): Minimum decrease in loss that counts as an
+            improvement. Defaults to 1e-4.
 
     Returns:
-        list[np.ndarray]: Deserialised model weights as numpy arrays.
+        bool: True if early stopping should be triggered, False otherwise.
     """
-    return [
-        np.frombuffer(base64.b64decode(e["data"]), dtype=e["dtype"]).reshape(e["shape"])
-        for e in entries
-    ]
+    if len(loss_history) <= patience:
+        return False
 
-
-def evaluate_loss() -> None:
-    """
-    TODO implement loss evaluation logic
-    :return:
-    """
-    pass
+    best_before_window = min(loss_history[:-patience])
+    recent_best = min(loss_history[-patience:])
+    return recent_best > best_before_window - min_delta
