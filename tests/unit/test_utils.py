@@ -393,7 +393,7 @@ class TestWeightsRoundTripHypothesis:
             np_st.arrays(
                 dtype=np.float32,
                 shape=st.tuples(st.integers(min_value=1, max_value=10), st.integers(min_value=1, max_value=10)),
-                elements=st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_inf=False)
+                elements=st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False)
             ),
             min_size=0, max_size=5
         )
