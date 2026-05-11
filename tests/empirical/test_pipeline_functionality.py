@@ -5,10 +5,15 @@ These tests verify that the complete pipeline of this library's components
 produces functional, usable results.
 """
 
+import importlib.util
+
 import numpy as np
+import pandas as pd
 import pytest
 import tempfile
 import os
+
+_TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 from fed_synthetic_data.federated_training import aggregation_model_weights_weighted_average
 from fed_synthetic_data.utils import weights_to_json, weights_from_json, sort_columns
@@ -247,8 +252,7 @@ class TestLoadedModelFunctionality:
 class TestSaveAndReloadPipeline:
     """Test saving and reloading models in the pipeline."""
 
-    @pytest.mark.skipif(not pytest.importorskip("torch", reason="PyTorch not available"), 
-                        allow_module_level=True)
+    @pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
     class TestPyTorchSaveReload:
         """PyTorch-specific save/reload tests."""
 
@@ -351,8 +355,7 @@ class TestSaveAndReloadPipeline:
 class TestFedMostlyAIEngineWorkflow:
     """Tests simulating fed-mostlyai-engine usage patterns."""
 
-    @pytest.mark.skipif(not pytest.importorskip("torch", reason="PyTorch not available"), 
-                        allow_module_level=True)
+    @pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
     class TestStateDictWorkflow:
         """Tests for workflow with PyTorch state_dict (as from fed-mostlyai-engine)."""
 

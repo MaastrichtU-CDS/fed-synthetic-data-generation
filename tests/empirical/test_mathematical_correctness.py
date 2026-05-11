@@ -5,8 +5,12 @@ These tests verify that the aggregation and serialisation functions
 produce mathematically correct results.
 """
 
+import importlib.util
+
 import numpy as np
 import pytest
+
+_TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 from fed_synthetic_data.federated_training import aggregation_model_weights_weighted_average
 from fed_synthetic_data.utils import weights_to_json, weights_from_json
@@ -227,8 +231,7 @@ class TestSerialisationFidelity:
         assert entry["dtype"] == "float32"
 
 
-@pytest.mark.skipif(not pytest.importorskip("torch", reason="PyTorch not available"), 
-                    allow_module_level=True)
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
 class TestPyTorchTensorCompatibility:
     """Verify our functions work with PyTorch tensors (as returned by fed-mostlyai-engine)."""
 

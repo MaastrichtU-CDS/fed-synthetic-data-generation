@@ -5,10 +5,14 @@ These tests verify interactions between post_training functions and external
 dependencies like PyTorch, file I/O, and other modules.
 """
 
+import importlib.util
+
 import numpy as np
 import pytest
 import tempfile
 import os
+
+_TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 from fed_synthetic_data.utils import weights_to_json, weights_from_json
 
@@ -17,7 +21,7 @@ from fed_synthetic_data.utils import weights_to_json, weights_from_json
 # PyTorch Integration Tests
 # =============================================================================
 
-@pytest.mark.skipif(not pytest.importorskip("torch", reason="PyTorch not available"), allow_module_level=True)
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
 class TestPostTrainingPyTorchIntegration:
     """Integration tests requiring PyTorch."""
 
@@ -125,7 +129,7 @@ class TestPostTrainingPyTorchIntegration:
 # Full Workflow Integration Tests
 # =============================================================================
 
-@pytest.mark.skipif(not pytest.importorskip("torch", reason="PyTorch not available"), allow_module_level=True)
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
 class TestPostTrainingFullWorkflow:
     """End-to-end workflow tests: serialisation -> loading -> saving."""
 
