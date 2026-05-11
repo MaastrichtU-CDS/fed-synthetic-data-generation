@@ -98,8 +98,10 @@ class TestSortColumnsFederatedWorkflow:
         # Apply canonical order
         sorted_df = sort_columns(edge_df, column_order=canonical_order)
         
-        # Should have only the columns that exist, in the canonical order
-        assert list(sorted_df.columns) == ["id", "feature_b", "label"]
+        # reindex produces all columns in canonical order; missing ones are NaN
+        assert list(sorted_df.columns) == canonical_order
+        assert pd.isna(sorted_df["feature_a"]).all()
+        assert pd.isna(sorted_df["feature_c"]).all()
 
     def test_column_order_with_extra_columns(self):
         """Handling extra columns in edge nodes."""
@@ -117,10 +119,9 @@ class TestSortColumnsFederatedWorkflow:
         # Apply canonical order
         sorted_df = sort_columns(edge_df, column_order=canonical_order)
         
-        # Should have canonical columns first, then extra columns
-        columns = list(sorted_df.columns)
-        assert columns[:3] == canonical_order
-        assert "extra_col" in columns
+        # reindex selects only columns in canonical_order; extra_col is dropped
+        assert list(sorted_df.columns) == canonical_order
+        assert "extra_col" not in sorted_df.columns
 
     def test_alphabetical_sort_as_fallback(self):
         """When no column_order provided, sorts alphabetically."""
