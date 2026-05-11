@@ -9,6 +9,7 @@ imported into a vantage6 algorithm.
 import numpy as np
 
 from functools import reduce
+from typing import Any
 
 
 def aggregation_model_weights_weighted_average(
@@ -35,7 +36,7 @@ def aggregation_model_weights_weighted_average(
     ]
 
 
-def evaluate_loss(loss_results: list[dict]) -> float:
+def evaluate_loss(loss_results: list[dict]) -> Any:
     """
     Compute the weighted average loss across federated sites.
 
