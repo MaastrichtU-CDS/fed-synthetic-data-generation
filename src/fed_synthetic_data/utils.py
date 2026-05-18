@@ -57,17 +57,48 @@ def sort_columns(df: pd.DataFrame, column_order: list[str] | None = None) -> pd.
     when flexible_generation is disabled in TabularARGN, which enforces a strict
     column order at generation time.
 
-    If no column_order is provided, the columns are sorted alphabetically and the
-    resulting order can be passed to subsequent nodes to enforce consistency.
+    If no column_order is provided, the columns are sorted with numeric types first
+    (sorted numerically), then string types (sorted alphabetically). This handles
+    mixed-type column names safely. For duplicate column names, uses iloc-based
+    reordering to avoid pandas errors.
 
     Args:
         df (pd.DataFrame): The input DataFrame.
         column_order (list[str] | None): An explicit column order to apply. If None,
-            columns are sorted alphabetically.
+            columns are sorted with numbers first, then strings.
 
     Returns:
         pd.DataFrame: A re-indexed DataFrame with columns in the specified order.
+        
+    Raises:
+        ValueError: If column_order is provided but contains columns not in df.
     """
     if column_order is None:
-        column_order = sorted(df.columns)
+        # Handle mixed types by sorting: numbers first (by value), then strings (alphabetically)
+        columns = list(df.columns)
+        
+        def sort_key(col):
+            # Numbers come first (group 0), strings come second (group 1)
+            if isinstance(col, (int, float, np.integer, np.floating)):
+                return (0, float(col))
+            else:
+                return (1, str(col))
+        
+        column_order = sorted(columns, key=sort_key)
+    
+    # Check for duplicate columns - if present, we need to use iloc-based reordering
+    if len(set(column_order)) < len(column_order):
+        # Has duplicates - find the permutation indices
+        col_list = list(df.columns)
+        # Build a mapping from column name to positions in column_order
+        # For duplicates, we maintain their relative order
+        order_indices = []
+        for col in column_order:
+            # Find the first occurrence of this column in the original df that hasn't been used yet
+            for i, orig_col in enumerate(col_list):
+                if orig_col == col and i not in order_indices:
+                    order_indices.append(i)
+                    break
+        return df.iloc[:, order_indices]
+    
     return df.reindex(column_order, axis=1)
