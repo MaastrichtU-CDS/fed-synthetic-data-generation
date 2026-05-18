@@ -31,15 +31,21 @@ jobs:
     
     - name: Run unit tests
       run: |
-        pytest tests/unit/ -v --cov=fed_synthetic_data --cov-report=xml --cov-report=term || echo "No unit tests found or coverage warning"
+        pytest tests/unit/ -v --cov=fed_synthetic_data --cov-report=xml --cov-report=term
+        code=$?
+        if [ $code -ne 0 ] && [ $code -ne 5 ]; then exit $code; fi
     
     - name: Run integration tests
       run: |
-        pytest tests/integration/ -v || echo "No integration tests found"
+        pytest tests/integration/ -v
+        code=$?
+        if [ $code -ne 0 ] && [ $code -ne 5 ]; then exit $code; fi
     
     - name: Run empirical tests
       run: |
-        pytest tests/empirical/ -v -m "not slow" || echo "No empirical tests found"
+        pytest tests/empirical/ -v -m "not slow"
+        code=$?
+        if [ $code -ne 0 ] && [ $code -ne 5 ]; then exit $code; fi
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
