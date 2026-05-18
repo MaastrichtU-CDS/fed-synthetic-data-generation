@@ -6,8 +6,17 @@ into a model and saving the result. Reuses serialisation utilities from
 utils.py.
 """
 
+import numpy as np
+
 from fed_synthetic_data.utils import weights_from_json
 from typing import Any, Protocol
+
+try:
+    import torch
+    _TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    _TORCH_AVAILABLE = False
 
 
 class ModelProtocol(Protocol):
@@ -42,7 +51,15 @@ def load_weights_into_model(
             f"Mismatch: {len(deserialised_weights)} weights vs {len(parameter_names)} names"
         )
 
-    state_dict = {name: weight for name, weight in zip(parameter_names, deserialised_weights)}
+    # Convert numpy arrays to tensors for PyTorch models
+    # PyTorch >= 2.5 rejects raw numpy arrays in load_state_dict
+    state_dict = {}
+    for name, weight in zip(parameter_names, deserialised_weights):
+        if torch is not None and isinstance(weight, np.ndarray):
+            # Convert numpy array to tensor, preserving dtype
+            weight = torch.from_numpy(weight)
+        state_dict[name] = weight
+    
     model.load_state_dict(state_dict)
     return model
 
@@ -80,13 +97,14 @@ def save_model(model: ModelProtocol, path: str, **kwargs) -> None:
         model: Model to save.
         path: Destination path.
         **kwargs: Framework-specific options (e.g., save_format for PyTorch).
+    
+    Raises:
+        NotImplementedError: If PyTorch is not available.
     """
-    try:
-        import torch
-
-        torch.save(model.state_dict(), path, **kwargs)
-    except ImportError:
+    if torch is None:
         raise NotImplementedError("Model saving requires PyTorch or a registered backend")
+    
+    torch.save(model.state_dict(), path, **kwargs)
 
 
 def save_model_weights(model: ModelProtocol, path: str) -> None:
