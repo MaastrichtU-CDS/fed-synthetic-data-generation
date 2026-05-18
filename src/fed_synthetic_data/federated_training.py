@@ -6,10 +6,11 @@ of synthetic data generators across multiple nodes. These are intended to be
 imported into a vantage6 algorithm.
 """
 
+from typing import Any
+
 import numpy as np
 
 from functools import reduce
-from typing import Any
 
 
 def aggregation_model_weights_weighted_average(
@@ -18,17 +19,36 @@ def aggregation_model_weights_weighted_average(
     """
     Compute weighted average of model parameters.
 
-    Ported from Flower (Apache-2.0):
+    Adapted from Flower (Apache-2.0):
     https://github.com/flwrlabs/flower/blob/983b0f29/framework/py/flwr/server/strategy/aggregate.py#L28-L43
+
+    Weights must be numpy arrays. Use :func:`fed_synthetic_data.utils.weights_from_json`
+    to deserialise JSON-transported weights before calling this function, and
+    :func:`fed_synthetic_data.utils._to_numpy` to convert torch tensors if needed.
 
     Args:
         results (list[tuple[list[np.ndarray], int]]): List of tuples containing model weights
-            and the number of training examples for each node.
+            as numpy arrays and the number of training examples for each node.
 
     Returns:
-        list[np.ndarray]: The aggregated model weights.
+        list[np.ndarray]: The aggregated model weights as numpy arrays.
+        An empty list is returned when results is empty.
+
+    Raises:
+        ValueError: If any sample count is negative, or if total samples is not positive.
     """
+    if not results:
+        return []
+
+    for _, n in results:
+        if n < 0:
+            raise ValueError(f"Sample count must be non-negative, got {n}")
+
     num_examples_total = sum(n for (_, n) in results)
+
+    if num_examples_total <= 0:
+        raise ValueError(f"Total number of samples must be positive, got {num_examples_total}")
+
     weighted_weights = [[layer * n for layer in weights] for weights, n in results]
     return [
         reduce(np.add, layer_updates) / num_examples_total

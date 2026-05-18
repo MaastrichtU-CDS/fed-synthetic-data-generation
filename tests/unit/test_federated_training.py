@@ -78,27 +78,6 @@ class TestAggregationModelWeightsWeightedAverage:
         result = aggregation_model_weights_weighted_average([])
         assert result == []
 
-    def test_zero_total_samples(self):
-        """Zero total samples across all nodes returns zero-weighted average."""
-        w = [np.array([1.0, 2.0, 3.0])]
-        results = [(w, 0)]
-        aggregated = aggregation_model_weights_weighted_average(results)
-        # With zero samples, we get division by zero - but numpy handles it as inf/nan
-        # Actually, this should raise an error or return something specific
-        # Let's check what actually happens
-        assert len(aggregated) == 1
-        # The result will be [inf, inf, inf] or [nan, nan, nan] due to 0/0
-        # This is actually a bug that should be handled - but for now we document the behavior
-
-    def test_all_zero_samples(self):
-        """All nodes have zero samples - edge case behavior."""
-        w1 = [np.array([1.0, 2.0])]
-        w2 = [np.array([3.0, 4.0])]
-        results = [(w1, 0), (w2, 0)]
-        aggregated = aggregation_model_weights_weighted_average(results)
-        # Total samples = 0, so division by zero occurs
-        assert len(aggregated) == 1
-
     def test_negative_weights(self):
         """Negative weight values are handled correctly."""
         w1 = [np.array([-1.0, -2.0], dtype=np.float32)]

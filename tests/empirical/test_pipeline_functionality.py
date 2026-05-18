@@ -377,8 +377,8 @@ class TestFedMostlyAIEngineWorkflow:
 
             # Convert to list format for our aggregation function
             # In practice, each federated node would provide its own state_dict
-            node1_weights = [v.clone() for v in state_dict.values()]
-            node2_weights = [v.clone() for v in state_dict.values()]
+            node1_weights = [v.detach().cpu().numpy() for v in state_dict.values()]
+            node2_weights = [v.detach().cpu().numpy() for v in state_dict.values()]
             parameter_names = list(state_dict.keys())
 
             # Step 1: Aggregate (simulating federated aggregation)
@@ -423,8 +423,8 @@ class TestFedMostlyAIEngineWorkflow:
             node2_model = nn.Sequential(nn.Linear(3, 2))
 
             # Extract weights from both nodes
-            node1_weights = [v.clone() for v in node1_model.state_dict().values()]
-            node2_weights = [v.clone() for v in node2_model.state_dict().values()]
+            node1_weights = [v.detach().cpu().numpy() for v in node1_model.state_dict().values()]
+            node2_weights = [v.detach().cpu().numpy() for v in node2_model.state_dict().values()]
             parameter_names = list(reference_state_dict.keys())
 
             # Aggregate
@@ -460,7 +460,7 @@ class TestFedMostlyAIEngineWorkflow:
 
             # Convert to our list format (in practice, this would be done per-node)
             # For a single node, just wrap in a list
-            weights_list = [model_weights[key] for key in model_weights]
+            weights_list = [model_weights[key].detach().cpu().numpy() for key in model_weights]
             parameter_names = list(model_weights.keys())
 
             # Now use our pipeline

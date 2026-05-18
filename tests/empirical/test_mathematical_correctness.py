@@ -285,8 +285,10 @@ class TestPyTorchTensorCompatibility:
         np.testing.assert_array_almost_equal(recovered[1], pytorch_weights[1].numpy())
 
     def test_aggregation_with_pytorch_tensors(self):
-        """Aggregation works with PyTorch tensors as input."""
+        """PyTorch tensors must be converted to numpy before aggregation."""
         import torch
+
+        from fed_synthetic_data.utils import _to_numpy
 
         # Create PyTorch tensors for two nodes
         node1_weights = [
@@ -298,25 +300,26 @@ class TestPyTorchTensorCompatibility:
             torch.tensor([0.2], dtype=torch.float32),
         ]
 
-        # Aggregate (should work with PyTorch tensors)
+        # Convert tensors to numpy before aggregating (caller responsibility)
+        node1_numpy = [_to_numpy(w) for w in node1_weights]
+        node2_numpy = [_to_numpy(w) for w in node2_weights]
+
         result = aggregation_model_weights_weighted_average(
             [
-                (node1_weights, 100),
-                (node2_weights, 100),
+                (node1_numpy, 100),
+                (node2_numpy, 100),
             ]
         )
 
-        # Result should be numpy arrays (from the aggregation function)
         assert len(result) == 2
         assert isinstance(result[0], np.ndarray)
         assert isinstance(result[1], np.ndarray)
 
-        # Values should be correct
         np.testing.assert_array_almost_equal(result[0], np.array([2.0, 3.0], dtype=np.float32))
         np.testing.assert_array_almost_equal(result[1], np.array([0.15], dtype=np.float32))
 
     def test_full_pytorch_tensor_workflow(self):
-        """Complete workflow: PyTorch tensors -> aggregate -> serialise -> deserialize."""
+        """Complete workflow: PyTorch tensors -> serialise -> deserialise -> aggregate."""
         import torch
 
         # Simulate two federated nodes with PyTorch tensors
@@ -329,21 +332,27 @@ class TestPyTorchTensorCompatibility:
             torch.tensor([0.2, 0.3], dtype=torch.float32),
         ]
 
-        # Step 1: Aggregate (with PyTorch tensors directly)
+        # Step 1: Each node serialises its tensors for transport
+        from fed_synthetic_data.utils import weights_to_json, weights_from_json
+
+        node1_json = weights_to_json(node1_weights)
+        node2_json = weights_to_json(node2_weights)
+
+        # Step 2: Server deserialises to numpy before aggregating
+        node1_numpy = weights_from_json(node1_json)
+        node2_numpy = weights_from_json(node2_json)
+
         aggregated = aggregation_model_weights_weighted_average(
             [
-                (node1_weights, 100),
-                (node2_weights, 100),
+                (node1_numpy, 100),
+                (node2_numpy, 100),
             ]
         )
 
-        # Step 2: Serialise
+        # Step 3: Serialise aggregated result for distribution
         serialized = weights_to_json(aggregated)
-
-        # Step 3: Deserialize
         recovered = weights_from_json(serialized)
 
-        # Verify
         assert len(recovered) == 2
         assert isinstance(recovered[0], np.ndarray)
         assert isinstance(recovered[1], np.ndarray)

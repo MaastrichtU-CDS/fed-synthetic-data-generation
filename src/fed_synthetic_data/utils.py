@@ -9,6 +9,23 @@ TODO: Implement utility functions for data manipulation, logging, and other comm
 import base64
 import numpy as np
 import pandas as pd
+from typing import Any
+
+
+def _to_numpy(w: Any) -> np.ndarray:
+    """
+    Convert a weight array (numpy or torch.Tensor) to numpy array.
+    
+    Args:
+        w: Weight array - can be numpy.ndarray or torch.Tensor.
+        
+    Returns:
+        numpy.ndarray: The weight as a numpy array.
+    """
+    # Check if it's a torch Tensor
+    if hasattr(w, "detach"):
+        w = w.detach().cpu().numpy()
+    return np.asarray(w)
 
 
 def weights_to_json(weights: list[np.ndarray]) -> list[dict]:
@@ -17,13 +34,14 @@ def weights_to_json(weights: list[np.ndarray]) -> list[dict]:
 
     Args:
         weights (list[np.ndarray]): List of model weights to serialise.
+            Can be numpy arrays or PyTorch tensors (as returned by fed-mostlyai-engine).
 
     Returns:
         list[dict]: List of dictionaries representing the weights in JSON-serialisable format.
     """
     return [
         {"shape": w.shape, "dtype": str(w.dtype), "data": base64.b64encode(w.tobytes()).decode()}
-        for w in weights
+        for w in (_to_numpy(wt) for wt in weights)
     ]
 
 
