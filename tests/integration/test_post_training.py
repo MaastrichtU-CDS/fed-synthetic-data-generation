@@ -207,8 +207,8 @@ class TestPostTrainingFullWorkflow:
 
         # Verify model has loaded the aggregated weights
         state_dict = model.state_dict()
-        assert state_dict["weight"].shape == (2, 2)
-        assert state_dict["bias"].shape == (2,)
+        assert state_dict["0.weight"].shape == (2, 2)
+        assert state_dict["0.bias"].shape == (2,)
 
         # Save the model
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -257,7 +257,7 @@ class TestPostTrainingUtilsIntegration:
         assert len(model.loaded) == 2
         np.testing.assert_array_equal(model.loaded["layer1"], original_weights[0])
         np.testing.assert_array_equal(model.loaded["layer2"], original_weights[1])
-        assert model.loaded["layer2"].dtype == np.float64
+        assert np.asarray(model.loaded["layer2"]).dtype == np.float64
 
     def test_different_dtypes_preserved_through_full_chain(self):
         """Verify dtype preservation through serialisation and loading."""
@@ -280,4 +280,4 @@ class TestPostTrainingUtilsIntegration:
             model = MockModel()
             load_model_from_json_weights(model, serialized, ["w"])
 
-            assert model.data["w"].dtype == dtype
+            assert np.asarray(model.data["w"]).dtype == dtype

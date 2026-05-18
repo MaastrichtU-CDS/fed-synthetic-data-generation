@@ -154,7 +154,7 @@ class TestAggregationToSerialisationToLoading:
             load_model_from_json_weights(model, serialized, ["w"])
 
             # Verify dtype preserved
-            assert model.loaded["w"].dtype == dtype
+            assert np.asarray(model.loaded["w"]).dtype == dtype
 
     def test_shape_preservation_through_pipeline(self):
         """Multi-dimensional shapes are preserved through the pipeline."""

@@ -50,7 +50,7 @@ class MockModel:
         if not self.loaded_state_dict:
             raise ValueError("Model has no loaded weights")
 
-        weight_sum = sum(np.sum(w) for w in self.loaded_state_dict.values())
+        weight_sum = sum(np.sum(np.asarray(w)) for w in self.loaded_state_dict.values())
         self.last_inference_input = x
         self.last_inference_output = weight_sum * x
         return self.last_inference_output
@@ -128,8 +128,8 @@ class TestAggregationToLoadingPipeline:
         load_model_from_json_weights(model, serialized, parameter_names)
 
         # Verify properties preserved
-        assert model.loaded_state_dict["layer1"].dtype == dtype
-        assert model.loaded_state_dict["layer2"].dtype == dtype
+        assert np.asarray(model.loaded_state_dict["layer1"]).dtype == dtype
+        assert np.asarray(model.loaded_state_dict["layer2"]).dtype == dtype
         assert model.loaded_state_dict["layer1"].shape == (10, 5)
         assert model.loaded_state_dict["layer2"].shape == (5, 2)
 
@@ -321,8 +321,8 @@ class TestSaveAndReloadPipeline:
             model2 = nn.Linear(3, 2)
 
             # Get weights as numpy
-            weights1 = [p.numpy() for p in model1.parameters()]
-            weights2 = [p.numpy() for p in model2.parameters()]
+            weights1 = [p.detach().numpy() for p in model1.parameters()]
+            weights2 = [p.detach().numpy() for p in model2.parameters()]
 
             # Aggregate
             aggregated = aggregation_model_weights_weighted_average(
@@ -349,10 +349,10 @@ class TestSaveAndReloadPipeline:
 
                 # Verify weights match
                 torch.testing.assert_close(
-                    final_model.weight, torch.from_numpy(new_model.weight.numpy())
+                    final_model.weight, torch.from_numpy(new_model.weight.detach().numpy())
                 )
                 torch.testing.assert_close(
-                    final_model.bias, torch.from_numpy(new_model.bias.numpy())
+                    final_model.bias, torch.from_numpy(new_model.bias.detach().numpy())
                 )
 
 
