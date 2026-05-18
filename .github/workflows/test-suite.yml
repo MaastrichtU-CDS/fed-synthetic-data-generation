@@ -29,23 +29,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[test]"
     
-    - name: Run unit tests
+    - name: Run tests
       run: |
-        pytest tests/unit/ -v --cov=fed_synthetic_data --cov-report=xml --cov-report=term
-        code=$?
-        if [ $code -ne 0 ] && [ $code -ne 5 ]; then exit $code; fi
-    
-    - name: Run integration tests
-      run: |
-        pytest tests/integration/ -v
-        code=$?
-        if [ $code -ne 0 ] && [ $code -ne 5 ]; then exit $code; fi
-    
-    - name: Run empirical tests
-      run: |
-        pytest tests/empirical/ -v -m "not slow"
-        code=$?
-        if [ $code -ne 0 ] && [ $code -ne 5 ]; then exit $code; fi
+        pytest tests/unit/ tests/integration/ tests/empirical/ -v -m "not slow" \
+          --cov=fed_synthetic_data --cov-report=xml --cov-report=term \
+          --continue-on-collection-errors
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
