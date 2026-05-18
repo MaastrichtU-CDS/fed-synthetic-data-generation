@@ -264,7 +264,7 @@ class TestSaveModel:
                     os.unlink(temp_path)
 
     def test_save_model_weights_to_nonexistent_directory(self):
-        """save_model_weights also fails for non-existent directory."""
+        """save_model_weights delegates to save_model with correct path."""
         model = MockModel()
 
         with patch("fed_synthetic_data.post_training.save_model") as mock_save:
@@ -273,10 +273,10 @@ class TestSaveModel:
             )
             path = os.path.join(non_existent_dir, "weights.pt")
 
-            with pytest.raises((FileNotFoundError, OSError)):
-                save_model_weights(model, path)
+            # This just verifies delegation; actual file system errors are tested in test_save_to_nonexistent_directory_raises
+            save_model_weights(model, path)
 
-            # Verify save_model was called
+            # Verify save_model was called with correct arguments
             mock_save.assert_called_once_with(model, path)
 
     def test_load_from_nonexistent_file_error(self):

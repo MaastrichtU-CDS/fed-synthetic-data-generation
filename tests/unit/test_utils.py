@@ -454,4 +454,5 @@ class TestJsonPayloadSchema:
             entry = weights_to_json([w])[0]
             assert set(entry.keys()) == {"shape", "dtype", "data"}
             assert entry["shape"] == (1, 2)
-            assert entry["dtype"] == np.dtype(dtype).str
+            # dtype is stored as string representation (e.g., 'float32', not '<f4')
+            assert entry["dtype"] == str(np.dtype(dtype))

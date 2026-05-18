@@ -200,8 +200,9 @@ class TestPostTrainingFullWorkflow:
         serialized = weights_to_json(aggregated)
 
         # Create model and load aggregated weights
+        # Use the correct parameter names from nn.Sequential(nn.Linear(2, 2)) state_dict
         model = nn.Sequential(nn.Linear(2, 2))
-        parameter_names = ["weight", "bias"]
+        parameter_names = ["0.weight", "0.bias"]
         load_model_from_json_weights(model, serialized, parameter_names)
 
         # Verify model has loaded the aggregated weights
