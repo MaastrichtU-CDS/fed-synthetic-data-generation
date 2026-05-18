@@ -55,7 +55,10 @@ class TestLoadWeightsIntoModel:
         result = load_weights_into_model(model, weights, parameter_names)
 
         assert result is model
-        assert model.loaded_state_dict == {"layer1.weights": weights[0]}
+        assert list(model.loaded_state_dict.keys()) == parameter_names
+        np.testing.assert_array_equal(
+            np.asarray(model.loaded_state_dict["layer1.weights"]), weights[0]
+        )
 
     def test_multiple_parameters(self):
         """Multiple weight arrays loaded into corresponding parameters."""
@@ -220,13 +223,13 @@ class TestSaveModel:
         model.state_dict = MagicMock(return_value={"w": np.array([1.0])})
 
         with patch("fed_synthetic_data.post_training.torch") as mock_torch:
-            # Create a path to a non-existent directory
+            # Simulate the real behaviour: torch.save raises when the directory is missing
+            mock_torch.save.side_effect = FileNotFoundError("No such file or directory")
             non_existent_dir = os.path.join(
                 tempfile.gettempdir(), "non_existent_dir_" + str(os.getpid())
             )
             path = os.path.join(non_existent_dir, "model.pt")
 
-            # torch.save should be called, which will fail if directory doesn't exist
             with pytest.raises((FileNotFoundError, OSError)):
                 save_model(model, path)
 
