@@ -15,10 +15,10 @@ from typing import Any
 def _to_numpy(w: Any) -> np.ndarray:
     """
     Convert a weight array (numpy or torch.Tensor) to numpy array.
-    
+
     Args:
         w: Weight array - can be numpy.ndarray or torch.Tensor.
-        
+
     Returns:
         numpy.ndarray: The weight as a numpy array.
     """
@@ -87,23 +87,23 @@ def sort_columns(df: pd.DataFrame, column_order: list[str] | None = None) -> pd.
 
     Returns:
         pd.DataFrame: A re-indexed DataFrame with columns in the specified order.
-        
+
     Raises:
         ValueError: If column_order is provided but contains columns not in df.
     """
     if column_order is None:
         # Handle mixed types by sorting: numbers first (by value), then strings (alphabetically)
         columns = list(df.columns)
-        
+
         def sort_key(col):
             # Numbers come first (group 0), strings come second (group 1)
             if isinstance(col, (int, float, np.integer, np.floating)):
                 return (0, float(col))
             else:
                 return (1, str(col))
-        
+
         column_order = sorted(columns, key=sort_key)
-    
+
     # Check for duplicate columns - if present, we need to use iloc-based reordering
     if len(set(column_order)) < len(column_order):
         # Has duplicates - find the permutation indices
@@ -118,5 +118,5 @@ def sort_columns(df: pd.DataFrame, column_order: list[str] | None = None) -> pd.
                     order_indices.append(i)
                     break
         return df.iloc[:, order_indices]
-    
+
     return df.reindex(column_order, axis=1)

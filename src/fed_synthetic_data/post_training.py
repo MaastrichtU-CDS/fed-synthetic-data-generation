@@ -9,10 +9,13 @@ utils.py.
 import numpy as np
 
 from fed_synthetic_data.utils import weights_from_json
+from types import ModuleType
 from typing import Any, Protocol
 
+torch: ModuleType | None
 try:
     import torch
+
     _TORCH_AVAILABLE = True
 except ImportError:
     torch = None
@@ -59,7 +62,7 @@ def load_weights_into_model(
             # Convert numpy array to tensor, preserving dtype
             weight = torch.from_numpy(weight)
         state_dict[name] = weight
-    
+
     model.load_state_dict(state_dict)
     return model
 
@@ -97,13 +100,13 @@ def save_model(model: ModelProtocol, path: str, **kwargs) -> None:
         model: Model to save.
         path: Destination path.
         **kwargs: Framework-specific options (e.g., save_format for PyTorch).
-    
+
     Raises:
         NotImplementedError: If PyTorch is not available.
     """
     if torch is None:
         raise NotImplementedError("Model saving requires PyTorch or a registered backend")
-    
+
     torch.save(model.state_dict(), path, **kwargs)
 
 
