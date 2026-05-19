@@ -7,45 +7,46 @@ TODO: Implement utility functions for data manipulation, logging, and other comm
 """
 
 import base64
+import math
 import numpy as np
 import pandas as pd
-from typing import Any
 
 
-def _to_numpy(w: Any) -> np.ndarray:
-    """
-    Convert a weight array (numpy or torch.Tensor) to numpy array.
-
-    Args:
-        w: Weight array - can be numpy.ndarray or torch.Tensor.
-
-    Returns:
-        numpy.ndarray: The weight as a numpy array.
-    """
-    # Check if it's a torch Tensor
-    if hasattr(w, "detach"):
-        w = w.detach().cpu().numpy()
-    return np.asarray(w)
-
-
-def weights_to_json(weights: list[np.ndarray]) -> list[dict]:
+def weights_to_json(weights: list[np.ndarray] | dict[str, np.ndarray]) -> list[dict]:
     """
     Serialise model weights for JSON transport.
 
+    Accepts either a list of arrays (unnamed) or a dict mapping parameter names
+    to arrays. When a dict is supplied every entry carries a ``"name"`` field so
+    that the parameter name survives the serialisation round-trip.
+
     Args:
-        weights (list[np.ndarray]): List of model weights to serialise.
-            Can be numpy arrays or PyTorch tensors (as returned by fed-mostlyai-engine).
+        weights: Model weights to serialise. Either a ``list[np.ndarray]`` or a
+            ``dict[str, np.ndarray]`` (parameter name → array). All elements
+            must already be numpy arrays.
 
     Returns:
-        list[dict]: List of dictionaries representing the weights in JSON-serialisable format.
+        list[dict]: List of dictionaries representing the weights in
+            JSON-serialisable format. Dict entries include an additional
+            ``"name"`` field with the parameter name.
     """
+    if isinstance(weights, dict):
+        return [
+            {
+                "name": name,
+                "shape": w.shape,
+                "dtype": str(w.dtype),
+                "data": base64.b64encode(w.tobytes()).decode(),
+            }
+            for name, w in weights.items()
+        ]
     return [
         {"shape": w.shape, "dtype": str(w.dtype), "data": base64.b64encode(w.tobytes()).decode()}
-        for w in (_to_numpy(wt) for wt in weights)
+        for w in weights
     ]
 
 
-def weights_from_json(entries: list[dict]) -> list[np.ndarray]:
+def weights_from_json(entries: list[dict]) -> list[np.ndarray] | dict[str, np.ndarray]:
     """
     Deserialise model weights from JSON transport format.
 
@@ -54,16 +55,122 @@ def weights_from_json(entries: list[dict]) -> list[np.ndarray]:
         - "dtype": A string representing the data type of the weight.
         - "shape": A tuple (or list) representing the shape of the weight array.
 
+    When every entry also contains a ``"name"`` field (as produced by
+    :func:`weights_to_json` when called with a dict), the result is a
+    ``dict[str, np.ndarray]`` keyed by parameter name, preserving the
+    name → array association. When no entries carry a ``"name"`` field the
+    original ``list[np.ndarray]`` is returned for backward-compatibility.
+
     Args:
         entries (list[dict]): List of serialised weight dictionaries.
 
     Returns:
-        list[np.ndarray]: Deserialised model weights as numpy arrays.
+        list[np.ndarray] | dict[str, np.ndarray]: Deserialised model weights.
     """
+    if not entries:
+        return []
+    if "name" in entries[0]:
+        return {
+            e["name"]: np.frombuffer(base64.b64decode(e["data"]), dtype=e["dtype"]).reshape(
+                e["shape"]
+            )
+            for e in entries
+        }
     return [
         np.frombuffer(base64.b64decode(e["data"]), dtype=e["dtype"]).reshape(e["shape"])
         for e in entries
     ]
+
+
+def _replace_non_finite(obj):
+    """Recursively replace non-finite floats with JSON-safe sentinel strings."""
+    if isinstance(obj, float):
+        if math.isinf(obj):
+            return "Infinity" if obj > 0 else "-Infinity"
+        if math.isnan(obj):
+            return "NaN"
+    elif isinstance(obj, dict):
+        return {k: _replace_non_finite(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_replace_non_finite(v) for v in obj]
+    return obj
+
+
+def _restore_non_finite(obj):
+    """Recursively restore JSON-safe sentinel strings back to Python floats."""
+    if obj == "Infinity":
+        return float("inf")
+    if obj == "-Infinity":
+        return float("-inf")
+    if obj == "NaN":
+        return float("nan")
+    if isinstance(obj, dict):
+        return {k: _restore_non_finite(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_restore_non_finite(v) for v in obj]
+    return obj
+
+
+def federated_state_to_json(state: dict) -> dict:
+    """
+    Produce a fully JSON-serialisable representation of a ``federated_state`` dict.
+
+    Handles the three standard keys returned by fed-mostlyai-engine:
+
+    * ``"model_weights"`` — serialised via :func:`weights_to_json` (dict path).
+    * ``"training_metrics"`` — passed through unchanged (all values are standard
+      JSON types).
+    * ``"lr_scheduler_state"`` — any ``float('inf')``, ``float('-inf')``, or
+      ``float('nan')`` values are replaced recursively with the sentinel strings
+      ``"Infinity"``, ``"-Infinity"``, and ``"NaN"`` so that ``json.dumps``
+      does not raise.
+
+    Missing keys are silently ignored so that partial ``federated_state`` dicts
+    (e.g. without ``"training_metrics"``) are handled without error.
+
+    Args:
+        state (dict): A ``federated_state`` dict as returned by fed-mostlyai-engine.
+
+    Returns:
+        dict: A new dict whose values are fully JSON-serialisable.
+    """
+    result = {}
+    if "model_weights" in state:
+        result["model_weights"] = weights_to_json(state["model_weights"])
+    if "training_metrics" in state:
+        result["training_metrics"] = state["training_metrics"]
+    if "lr_scheduler_state" in state:
+        result["lr_scheduler_state"] = _replace_non_finite(state["lr_scheduler_state"])
+    return result
+
+
+def federated_state_from_json(state: dict) -> dict:
+    """
+    Invert :func:`federated_state_to_json`, recovering the original Python objects.
+
+    * ``"model_weights"`` — deserialised via :func:`weights_from_json`.
+    * ``"training_metrics"`` — passed through unchanged.
+    * ``"lr_scheduler_state"`` — sentinel strings ``"Infinity"``, ``"-Infinity"``,
+      and ``"NaN"`` are converted back to the corresponding Python floats.
+
+    Missing keys are silently ignored.
+
+    Args:
+        state (dict): A JSON-deserialised ``federated_state`` dict (as produced
+            by :func:`federated_state_to_json`).
+
+    Returns:
+        dict: The recovered ``federated_state`` with numpy weight arrays and
+            native Python floats.
+    """
+    result = {}
+    if "model_weights" in state:
+        result["model_weights"] = weights_from_json(state["model_weights"])
+    if "training_metrics" in state:
+        result["training_metrics"] = state["training_metrics"]
+    if "lr_scheduler_state" in state:
+        result["lr_scheduler_state"] = _restore_non_finite(state["lr_scheduler_state"])
+    return result
 
 
 def sort_columns(df: pd.DataFrame, column_order: list[str] | None = None) -> pd.DataFrame:

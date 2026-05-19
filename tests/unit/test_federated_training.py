@@ -263,3 +263,72 @@ class TestAggregationModelWeightsWeightedAverageShape:
         # Total samples = 0, should raise ValueError
         with pytest.raises(ValueError, match="Total number of samples must be positive"):
             aggregation_model_weights_weighted_average(results)
+
+
+class TestAggregationDictWeights:
+    """Tests for aggregation_model_weights_weighted_average with dict[str, np.ndarray] inputs."""
+
+    def test_dict_aggregation_known_result(self):
+        """Manually verify weighted average with dict inputs."""
+        w1 = {"fc.weight": np.array([2.0, 4.0]), "fc.bias": np.array([1.0])}
+        w2 = {"fc.weight": np.array([4.0, 8.0]), "fc.bias": np.array([3.0])}
+        # 1 sample vs 3 samples
+        results = [(w1, 1), (w2, 3)]
+        aggregated = aggregation_model_weights_weighted_average(results)
+
+        assert isinstance(aggregated, dict)
+        np.testing.assert_array_almost_equal(aggregated["fc.weight"], np.array([3.5, 7.0]))
+        np.testing.assert_array_almost_equal(aggregated["fc.bias"], np.array([2.5]))
+
+    def test_dict_aggregation_preserves_keys(self):
+        """Aggregated dict contains exactly the same keys as input nodes."""
+        keys = ["encoder.weight", "encoder.bias", "decoder.weight"]
+        w = {k: np.ones(3, dtype=np.float32) for k in keys}
+        results = [(w, 10), (w, 10)]
+        aggregated = aggregation_model_weights_weighted_average(results)
+
+        assert isinstance(aggregated, dict)
+        assert set(aggregated.keys()) == set(keys)
+
+    def test_dict_aggregation_equal_nodes(self):
+        """Equal weights from equal-sized dict nodes produce the same weights."""
+        w = {"a": np.array([1.0, 2.0, 3.0])}
+        results = [(w, 10), (w, 10)]
+        aggregated = aggregation_model_weights_weighted_average(results)
+
+        np.testing.assert_array_almost_equal(aggregated["a"], w["a"])
+
+    def test_dict_aggregation_key_order_independent(self):
+        """Aggregation with dict inputs is correct regardless of key insertion order."""
+        w1 = {"x": np.array([1.0]), "y": np.array([2.0])}
+        w2 = {"y": np.array([4.0]), "x": np.array([2.0])}  # reversed order
+        results = [(w1, 1), (w2, 1)]
+        aggregated = aggregation_model_weights_weighted_average(results)
+
+        np.testing.assert_array_almost_equal(aggregated["x"], np.array([1.5]))
+        np.testing.assert_array_almost_equal(aggregated["y"], np.array([3.0]))
+
+    def test_dict_key_mismatch_raises(self):
+        """Mismatched parameter names between nodes raise ValueError."""
+        w1 = {"layer.weight": np.array([1.0, 2.0]), "layer.bias": np.array([0.1])}
+        w2 = {"layer.weight": np.array([1.0, 2.0]), "WRONG.bias": np.array([0.1])}
+        results = [(w1, 10), (w2, 10)]
+
+        with pytest.raises(ValueError, match="mismatch"):
+            aggregation_model_weights_weighted_average(results)
+
+    def test_dict_extra_key_raises(self):
+        """Node 2 having an extra key compared to node 1 raises ValueError."""
+        w1 = {"a": np.array([1.0])}
+        w2 = {"a": np.array([1.0]), "b": np.array([2.0])}
+        results = [(w1, 10), (w2, 10)]
+
+        with pytest.raises(ValueError):
+            aggregation_model_weights_weighted_average(results)
+
+    def test_dict_single_node(self):
+        """A single dict-node's weights are returned unchanged."""
+        w = {"p": np.array([5.0, 6.0, 7.0])}
+        aggregated = aggregation_model_weights_weighted_average([(w, 42)])
+
+        np.testing.assert_array_almost_equal(aggregated["p"], w["p"])

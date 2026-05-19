@@ -6,7 +6,7 @@ of synthetic data generators across multiple nodes. These are intended to be
 imported into a vantage6 algorithm.
 """
 
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -14,8 +14,8 @@ from functools import reduce
 
 
 def aggregation_model_weights_weighted_average(
-    results: list[tuple[list[np.ndarray], int]],
-) -> list[np.ndarray]:
+    results: list[tuple[list[np.ndarray] | dict[str, np.ndarray], int]],
+) -> list[np.ndarray] | dict[str, np.ndarray]:
     """
     Compute weighted average of model parameters.
 
@@ -23,19 +23,29 @@ def aggregation_model_weights_weighted_average(
     https://github.com/flwrlabs/flower/blob/983b0f29/framework/py/flwr/server/strategy/aggregate.py#L28-L43
 
     Weights must be numpy arrays. Use :func:`fed_synthetic_data.utils.weights_from_json`
-    to deserialise JSON-transported weights before calling this function, and
-    :func:`fed_synthetic_data.utils._to_numpy` to convert torch tensors if needed.
+    to deserialise JSON-transported weights before calling this function.
+
+    Accepts either the list form ``list[tuple[list[np.ndarray], int]]`` (positional,
+    existing behaviour) or the dict form ``list[tuple[dict[str, np.ndarray], int]]``
+    (keyed by parameter name). When the dict form is used, parameters are matched by
+    name so differing key orders between nodes are handled correctly. A
+    :exc:`ValueError` is raised if the sets of parameter names differ between any
+    two nodes.
 
     Args:
-        results (list[tuple[list[np.ndarray], int]]): List of tuples containing model weights
-            as numpy arrays and the number of training examples for each node.
+        results (list[tuple[list[np.ndarray] | dict[str, np.ndarray], int]]):
+            List of tuples containing model weights (as a list or dict of numpy
+            arrays) and the number of training examples for each node.
 
     Returns:
-        list[np.ndarray]: The aggregated model weights as numpy arrays.
-        An empty list is returned when results is empty.
+        list[np.ndarray] | dict[str, np.ndarray]: The aggregated model weights,
+            in the same format as the input weights (list or dict).
+            An empty list is returned when results is empty.
 
     Raises:
-        ValueError: If any sample count is negative, or if total samples is not positive.
+        ValueError: If any sample count is negative, if total samples is not
+            positive, or (for dict inputs) if the parameter-name sets differ
+            between nodes.
     """
     if not results:
         return []
@@ -48,6 +58,25 @@ def aggregation_model_weights_weighted_average(
 
     if num_examples_total <= 0:
         raise ValueError(f"Total number of samples must be positive, got {num_examples_total}")
+
+    first_weights = results[0][0]
+    if isinstance(first_weights, dict):
+        dict_results: list[tuple[dict[str, np.ndarray], int]] = [
+            (cast(dict[str, np.ndarray], w), n) for w, n in results
+        ]
+        reference_keys = list(first_weights.keys())
+        reference_key_set = set(reference_keys)
+        for weights, _ in dict_results[1:]:
+            if set(weights.keys()) != reference_key_set:
+                raise ValueError(
+                    f"Parameter name mismatch between nodes: "
+                    f"expected {reference_key_set}, got {set(weights.keys())}"
+                )
+        return {
+            key: reduce(np.add, [weights[key] * n for weights, n in dict_results])
+            / num_examples_total
+            for key in reference_keys
+        }
 
     weighted_weights = [[layer * n for layer in weights] for weights, n in results]
     return [
@@ -112,3 +141,11 @@ def should_stop_early(
     best_before_window = min(loss_history[:-patience])
     recent_best = min(loss_history[-patience:])
     return recent_best > best_before_window - min_delta
+
+
+def lr_determination():
+    """
+    TODO: Determine learning rate for the next round of federated training.
+    This is to ensure that the LR can be coordinated across all nodes.
+    """
+    pass

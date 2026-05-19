@@ -8,6 +8,7 @@ including sort_columns, weights_to_json, and weights_from_json.
 import base64
 import binascii
 import json
+import math
 
 import numpy as np
 import pytest
@@ -19,6 +20,8 @@ from fed_synthetic_data.utils import (
     sort_columns,
     weights_from_json,
     weights_to_json,
+    federated_state_to_json,
+    federated_state_from_json,
 )
 
 
@@ -456,3 +459,243 @@ class TestJsonPayloadSchema:
             assert entry["shape"] == (1, 2)
             # dtype is stored as string representation (e.g., 'float32', not '<f4')
             assert entry["dtype"] == str(np.dtype(dtype))
+
+
+class TestWeightsToJsonDict:
+    """Test cases for weights_to_json with dict[str, np.ndarray] input."""
+
+    def test_dict_input_embeds_name(self):
+        """Dict input produces entries that each carry a 'name' field."""
+        weights = {"layer.weight": np.array([1.0, 2.0], dtype=np.float32)}
+        result = weights_to_json(weights)
+        assert len(result) == 1
+        assert result[0]["name"] == "layer.weight"
+
+    def test_dict_input_all_names_preserved(self):
+        """All parameter names from a dict are present in the output."""
+        weights = {
+            "fc1.weight": np.zeros((4, 8), dtype=np.float32),
+            "fc1.bias": np.zeros(4, dtype=np.float32),
+            "fc2.weight": np.zeros((2, 4), dtype=np.float32),
+        }
+        result = weights_to_json(weights)
+        assert [e["name"] for e in result] == list(weights.keys())
+
+    def test_dict_input_schema_includes_name(self):
+        """Every entry for a dict input has exactly name, shape, dtype, data keys."""
+        weights = {"w": np.eye(3, dtype=np.float32)}
+        result = weights_to_json(weights)
+        assert set(result[0].keys()) == {"name", "shape", "dtype", "data"}
+
+    def test_dict_input_is_json_serialisable(self):
+        """Output from a dict input is JSON-serialisable."""
+        weights = {"bias": np.array([0.1, 0.2, 0.3], dtype=np.float64)}
+        json.dumps(weights_to_json(weights))  # must not raise
+
+    def test_empty_dict(self):
+        """An empty dict serialises to an empty list."""
+        assert weights_to_json({}) == []
+
+    def test_list_input_does_not_include_name(self):
+        """List input never produces a 'name' field (backward-compatible)."""
+        weights = [np.array([1.0, 2.0], dtype=np.float32)]
+        for entry in weights_to_json(weights):
+            assert "name" not in entry
+
+
+class TestWeightsFromJsonDict:
+    """Test cases for weights_from_json returning dict[str, np.ndarray]."""
+
+    def test_named_entries_return_dict(self):
+        """Entries with 'name' key produce a dict, not a list."""
+        weights = {
+            "fc.weight": np.array([[1.0, 2.0]], dtype=np.float32),
+            "fc.bias": np.array([0.5], dtype=np.float32),
+        }
+        recovered = weights_from_json(weights_to_json(weights))
+        assert isinstance(recovered, dict)
+
+    def test_dict_round_trip_keys(self):
+        """Parameter names survive a full serialise → deserialise round-trip."""
+        weights = {
+            "encoder.weight": np.random.rand(4, 8).astype(np.float32),
+            "encoder.bias": np.zeros(4, dtype=np.float32),
+        }
+        recovered = weights_from_json(weights_to_json(weights))
+        assert set(recovered.keys()) == set(weights.keys())
+
+    def test_dict_round_trip_values(self):
+        """Array values survive a full serialise → deserialise round-trip."""
+        weights = {
+            "w": np.array([1.0, 2.0, 3.0], dtype=np.float32),
+            "b": np.array([0.1], dtype=np.float64),
+        }
+        recovered = weights_from_json(weights_to_json(weights))
+        for name, original in weights.items():
+            np.testing.assert_array_equal(recovered[name], original)
+
+    def test_unnamed_entries_still_return_list(self):
+        """Entries without 'name' still return a list (backward-compat)."""
+        weights = [np.array([1.0, 2.0], dtype=np.float32)]
+        recovered = weights_from_json(weights_to_json(weights))
+        assert isinstance(recovered, list)
+
+    def test_empty_entries_return_list(self):
+        """Empty entry list returns an empty list (not a dict)."""
+        result = weights_from_json([])
+        assert result == []
+        assert isinstance(result, list)
+
+
+class TestFederatedStateSerialisation:
+    """Tests for federated_state_to_json and federated_state_from_json."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _make_state(self):
+        """Build a realistic federated_state fixture with all three keys."""
+        return {
+            "model_weights": {
+                "encoder.weight": np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
+                "encoder.bias": np.array([0.1, 0.2], dtype=np.float32),
+            },
+            "training_metrics": {"epoch": 5, "train_loss": 0.42, "best_loss": None},
+            "lr_scheduler_state": {
+                "last_epoch": 5,
+                "mode_worse": float("inf"),
+                "best": 0.42,
+                "cooldown_counter": 0,
+                "num_bad_epochs": 2,
+                "history": [1.0, float("inf"), float("-inf"), float("nan")],
+            },
+        }
+
+    # ------------------------------------------------------------------
+    # federated_state_to_json
+    # ------------------------------------------------------------------
+
+    def test_output_passes_json_dumps(self):
+        """federated_state_to_json output is accepted by json.dumps without error."""
+        serialised = federated_state_to_json(self._make_state())
+        json.dumps(serialised)  # must not raise
+
+    def test_inf_replaced_in_lr_scheduler_state(self):
+        """float('inf') in lr_scheduler_state is replaced with 'Infinity'."""
+        state = {"lr_scheduler_state": {"mode_worse": float("inf"), "val": 1.0}}
+        result = federated_state_to_json(state)
+        assert result["lr_scheduler_state"]["mode_worse"] == "Infinity"
+        assert result["lr_scheduler_state"]["val"] == 1.0
+
+    def test_neg_inf_replaced_in_lr_scheduler_state(self):
+        """float('-inf') in lr_scheduler_state is replaced with '-Infinity'."""
+        state = {"lr_scheduler_state": {"x": float("-inf")}}
+        result = federated_state_to_json(state)
+        assert result["lr_scheduler_state"]["x"] == "-Infinity"
+
+    def test_nan_replaced_in_lr_scheduler_state(self):
+        """float('nan') in lr_scheduler_state is replaced with 'NaN'."""
+        state = {"lr_scheduler_state": {"x": float("nan")}}
+        result = federated_state_to_json(state)
+        assert result["lr_scheduler_state"]["x"] == "NaN"
+
+    def test_nested_list_inf_replaced(self):
+        """Non-finite values inside nested lists are also replaced."""
+        state = {"lr_scheduler_state": {"history": [1.0, float("inf"), float("-inf")]}}
+        result = federated_state_to_json(state)
+        assert result["lr_scheduler_state"]["history"] == [1.0, "Infinity", "-Infinity"]
+
+    def test_model_weights_serialised_with_names(self):
+        """model_weights dict is serialised via weights_to_json (carries 'name' field)."""
+        state = {
+            "model_weights": {"w": np.array([1.0, 2.0], dtype=np.float32)},
+        }
+        result = federated_state_to_json(state)
+        assert isinstance(result["model_weights"], list)
+        assert result["model_weights"][0]["name"] == "w"
+
+    def test_training_metrics_passed_through(self):
+        """training_metrics is returned unchanged."""
+        metrics = {"epoch": 3, "loss": 0.5, "best": None}
+        state = {"training_metrics": metrics}
+        result = federated_state_to_json(state)
+        assert result["training_metrics"] == metrics
+
+    def test_missing_keys_handled_gracefully(self):
+        """A state dict with only some keys present produces no KeyError."""
+        # Only lr_scheduler_state, no model_weights or training_metrics
+        state = {"lr_scheduler_state": {"mode_worse": float("inf")}}
+        result = federated_state_to_json(state)
+        assert "model_weights" not in result
+        assert "training_metrics" not in result
+        assert result["lr_scheduler_state"]["mode_worse"] == "Infinity"
+
+    # ------------------------------------------------------------------
+    # federated_state_from_json round-trips
+    # ------------------------------------------------------------------
+
+    def test_round_trip_model_weights(self):
+        """model_weights arrays are recovered exactly after a round-trip."""
+        original = self._make_state()
+        recovered = federated_state_from_json(federated_state_to_json(original))
+
+        assert isinstance(recovered["model_weights"], dict)
+        assert set(recovered["model_weights"].keys()) == set(original["model_weights"].keys())
+        for name, arr in original["model_weights"].items():
+            np.testing.assert_array_equal(recovered["model_weights"][name], arr)
+
+    def test_round_trip_inf_restored(self):
+        """float('inf') is restored after a round-trip."""
+        state = {"lr_scheduler_state": {"mode_worse": float("inf"), "best": 0.5}}
+        recovered = federated_state_from_json(federated_state_to_json(state))
+        assert math.isinf(recovered["lr_scheduler_state"]["mode_worse"])
+        assert recovered["lr_scheduler_state"]["mode_worse"] > 0
+
+    def test_round_trip_neg_inf_restored(self):
+        """float('-inf') is restored after a round-trip."""
+        state = {"lr_scheduler_state": {"x": float("-inf")}}
+        recovered = federated_state_from_json(federated_state_to_json(state))
+        assert math.isinf(recovered["lr_scheduler_state"]["x"])
+        assert recovered["lr_scheduler_state"]["x"] < 0
+
+    def test_round_trip_nan_restored(self):
+        """float('nan') is restored after a round-trip."""
+        state = {"lr_scheduler_state": {"x": float("nan")}}
+        recovered = federated_state_from_json(federated_state_to_json(state))
+        assert math.isnan(recovered["lr_scheduler_state"]["x"])
+
+    def test_round_trip_training_metrics_none_preserved(self):
+        """None values in training_metrics survive the round-trip unchanged."""
+        state = {"training_metrics": {"best_loss": None, "epoch": 1}}
+        recovered = federated_state_from_json(federated_state_to_json(state))
+        assert recovered["training_metrics"]["best_loss"] is None
+
+    def test_round_trip_full_state(self):
+        """Full federated_state round-trip produces correct values for all keys."""
+        original = self._make_state()
+        recovered = federated_state_from_json(federated_state_to_json(original))
+
+        # model_weights
+        for name, arr in original["model_weights"].items():
+            np.testing.assert_array_equal(recovered["model_weights"][name], arr)
+
+        # training_metrics
+        assert recovered["training_metrics"] == original["training_metrics"]
+
+        # lr_scheduler_state — check finite values and inf
+        sched_orig = original["lr_scheduler_state"]
+        sched_rec = recovered["lr_scheduler_state"]
+        assert sched_rec["last_epoch"] == sched_orig["last_epoch"]
+        assert math.isinf(sched_rec["mode_worse"]) and sched_rec["mode_worse"] > 0
+        assert sched_rec["best"] == sched_orig["best"]
+
+    def test_partial_state_no_error(self):
+        """State with only model_weights (no scheduler or metrics) round-trips cleanly."""
+        state = {
+            "model_weights": {"p": np.array([3.0, 4.0], dtype=np.float64)},
+        }
+        recovered = federated_state_from_json(federated_state_to_json(state))
+        np.testing.assert_array_equal(recovered["model_weights"]["p"], state["model_weights"]["p"])
+        assert "training_metrics" not in recovered
+        assert "lr_scheduler_state" not in recovered

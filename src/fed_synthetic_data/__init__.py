@@ -18,7 +18,13 @@ from .post_training import (
     save_model_weights,
 )
 
-from .utils import weights_to_json, weights_from_json, sort_columns
+from .utils import (
+    weights_to_json,
+    weights_from_json,
+    sort_columns,
+    federated_state_to_json,
+    federated_state_from_json,
+)
 
 __all__ = [
     "aggregation_model_weights_weighted_average",
@@ -31,6 +37,8 @@ __all__ = [
     "weights_to_json",
     "weights_from_json",
     "sort_columns",
+    "federated_state_to_json",
+    "federated_state_from_json",
 ]
 
 __version__ = "0.1.0"

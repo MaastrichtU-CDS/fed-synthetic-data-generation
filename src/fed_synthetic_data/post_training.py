@@ -86,6 +86,9 @@ def load_model_from_json_weights(
         Model with loaded aggregated weights.
     """
     deserialised_weights = weights_from_json(serialized_weights)
+    if isinstance(deserialised_weights, dict):
+        weights_list: list[Any] = [deserialised_weights[name] for name in parameter_names]
+        return load_weights_into_model(model, weights_list, parameter_names)
     return load_weights_into_model(model, deserialised_weights, parameter_names)
 
 

@@ -242,7 +242,7 @@ class TestPyTorchTensorCompatibility:
     """Verify our functions work with PyTorch tensors (as returned by fed-mostlyai-engine)."""
 
     def test_weights_to_json_with_pytorch_tensors(self):
-        """PyTorch tensors can be serialised directly without numpy conversion."""
+        """Converting PyTorch tensors to numpy before calling weights_to_json is the caller's responsibility."""
         import torch
 
         # Create PyTorch tensors (as fed-mostlyai-engine returns them)
@@ -251,8 +251,9 @@ class TestPyTorchTensorCompatibility:
             torch.tensor([4.0, 5.0], dtype=torch.float64),
         ]
 
-        # This should work without converting to numpy first
-        serialized = weights_to_json(pytorch_weights)
+        # Caller must convert to numpy first
+        numpy_weights = [w.detach().cpu().numpy() for w in pytorch_weights]
+        serialized = weights_to_json(numpy_weights)
 
         assert len(serialized) == 2
         assert serialized[0]["shape"] == (3,)
@@ -262,7 +263,7 @@ class TestPyTorchTensorCompatibility:
         assert isinstance(serialized[0]["data"], str)
 
     def test_weights_from_json_with_pytorch_serialized_tensors(self):
-        """PyTorch tensors can be serialised and deserialised to numpy arrays."""
+        """PyTorch tensors converted to numpy can be serialised and deserialised."""
         import torch
 
         # Create PyTorch tensors
@@ -271,8 +272,9 @@ class TestPyTorchTensorCompatibility:
             torch.tensor([4.0, 5.0], dtype=torch.float64),
         ]
 
-        # Serialise and deserialize
-        serialized = weights_to_json(pytorch_weights)
+        # Caller must convert to numpy first
+        numpy_weights = [w.detach().cpu().numpy() for w in pytorch_weights]
+        serialized = weights_to_json(numpy_weights)
         recovered = weights_from_json(serialized)
 
         # Should return numpy arrays
@@ -288,8 +290,6 @@ class TestPyTorchTensorCompatibility:
         """PyTorch tensors must be converted to numpy before aggregation."""
         import torch
 
-        from fed_synthetic_data.utils import _to_numpy
-
         # Create PyTorch tensors for two nodes
         node1_weights = [
             torch.tensor([1.0, 2.0], dtype=torch.float32),
@@ -301,8 +301,8 @@ class TestPyTorchTensorCompatibility:
         ]
 
         # Convert tensors to numpy before aggregating (caller responsibility)
-        node1_numpy = [_to_numpy(w) for w in node1_weights]
-        node2_numpy = [_to_numpy(w) for w in node2_weights]
+        node1_numpy = [w.detach().cpu().numpy() for w in node1_weights]
+        node2_numpy = [w.detach().cpu().numpy() for w in node2_weights]
 
         result = aggregation_model_weights_weighted_average(
             [
@@ -319,7 +319,7 @@ class TestPyTorchTensorCompatibility:
         np.testing.assert_array_almost_equal(result[1], np.array([0.15], dtype=np.float32))
 
     def test_full_pytorch_tensor_workflow(self):
-        """Complete workflow: PyTorch tensors -> serialise -> deserialise -> aggregate."""
+        """Complete workflow: PyTorch tensors -> convert to numpy -> serialise -> deserialise -> aggregate."""
         import torch
 
         # Simulate two federated nodes with PyTorch tensors
@@ -332,11 +332,11 @@ class TestPyTorchTensorCompatibility:
             torch.tensor([0.2, 0.3], dtype=torch.float32),
         ]
 
-        # Step 1: Each node serialises its tensors for transport
+        # Step 1: Each node converts tensors to numpy and serialises for transport
         from fed_synthetic_data.utils import weights_to_json, weights_from_json
 
-        node1_json = weights_to_json(node1_weights)
-        node2_json = weights_to_json(node2_weights)
+        node1_json = weights_to_json([w.detach().cpu().numpy() for w in node1_weights])
+        node2_json = weights_to_json([w.detach().cpu().numpy() for w in node2_weights])
 
         # Step 2: Server deserialises to numpy before aggregating
         node1_numpy = weights_from_json(node1_json)

@@ -607,7 +607,9 @@ class TestRealisticFederatedScenario:
         samples_per_node = [500, 1200, 3000, 250, 800, 4500]
         total = sum(samples_per_node)
 
-        node_weights = [rng.normal(0.0, 0.1, size=shape).astype(np.float32) for _ in samples_per_node]
+        node_weights = [
+            rng.normal(0.0, 0.1, size=shape).astype(np.float32) for _ in samples_per_node
+        ]
 
         aggregated = aggregation_model_weights_weighted_average(
             [([w], n) for w, n in zip(node_weights, samples_per_node)]
