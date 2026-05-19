@@ -485,6 +485,212 @@ class TestFedMostlyAIEngineWorkflow:
 
 
 # =============================================================================
+# Realistic Federated Scenario Tests
+# =============================================================================
+
+
+class TestRealisticFederatedScenario:
+    """Tests using weight magnitudes and architectures representative of real federated learning."""
+
+    def test_aggregation_with_xavier_initialised_weights(self):
+        """Aggregation of Xavier-initialised weights stays within the expected magnitude range."""
+        # Xavier uniform init for a 128->64 layer: limit = sqrt(6 / (128 + 64)) ≈ 0.177
+        rng = np.random.default_rng(42)
+        fan_in, fan_out = 128, 64
+        limit = np.sqrt(6.0 / (fan_in + fan_out))
+
+        num_nodes = 5
+        samples_per_node = [1000, 1500, 800, 2000, 1200]
+
+        node_weights = [
+            [
+                rng.uniform(-limit, limit, size=(fan_out, fan_in)).astype(np.float32),
+                np.zeros(fan_out, dtype=np.float32),
+            ]
+            for _ in range(num_nodes)
+        ]
+
+        aggregated = aggregation_model_weights_weighted_average(
+            list(zip(node_weights, samples_per_node))
+        )
+
+        assert aggregated[0].shape == (fan_out, fan_in)
+        assert np.all(np.abs(aggregated[0]) <= limit + 1e-6)
+        # Biases are all zero across nodes, so the average must also be zero
+        np.testing.assert_array_almost_equal(aggregated[1], np.zeros(fan_out, dtype=np.float32))
+
+    def test_aggregation_with_multilayer_realistic_architecture(self):
+        """Aggregation preserves structure and dtype across a typical multi-layer architecture."""
+        # Typical generator-like architecture: 128 -> 64 -> 32 -> 16
+        layer_configs = [(128, 64), (64, 32), (32, 16)]
+        rng = np.random.default_rng(0)
+
+        def _xavier_layer(fan_in, fan_out):
+            limit = np.sqrt(6.0 / (fan_in + fan_out))
+            return [
+                rng.uniform(-limit, limit, size=(fan_out, fan_in)).astype(np.float32),
+                np.zeros(fan_out, dtype=np.float32),
+            ]
+
+        num_nodes = 4
+        samples_per_node = [2000, 3000, 1500, 2500]
+
+        node_weights = []
+        for _ in range(num_nodes):
+            layers = []
+            for fan_in, fan_out in layer_configs:
+                layers.extend(_xavier_layer(fan_in, fan_out))
+            node_weights.append(layers)
+
+        aggregated = aggregation_model_weights_weighted_average(
+            list(zip(node_weights, samples_per_node))
+        )
+
+        # Weights and biases alternate; verify shape and dtype for every layer
+        weight_layers = aggregated[0::2]
+        bias_layers = aggregated[1::2]
+
+        for agg_w, (fan_in, fan_out) in zip(weight_layers, layer_configs):
+            assert agg_w.shape == (fan_out, fan_in)
+            assert agg_w.dtype == np.float32
+
+        for agg_b, (_, fan_out) in zip(bias_layers, layer_configs):
+            assert agg_b.shape == (fan_out,)
+            assert agg_b.dtype == np.float32
+
+    def test_aggregation_dominated_by_largest_node(self):
+        """Aggregated result is strongly pulled towards the node with by far the most samples."""
+        rng = np.random.default_rng(7)
+        shape = (64, 32)
+
+        dominant_weights = rng.normal(0.0, 0.1, size=shape).astype(np.float32)
+        small_weights = [rng.normal(0.0, 0.1, size=shape).astype(np.float32) for _ in range(4)]
+
+        node_weights_and_samples = [([dominant_weights], 10_000)] + [
+            ([w], 10) for w in small_weights
+        ]
+
+        aggregated = aggregation_model_weights_weighted_average(node_weights_and_samples)
+
+        # With 10000 vs 4×10 samples the result must be very close to the dominant node
+        np.testing.assert_array_almost_equal(aggregated[0], dominant_weights, decimal=2)
+
+    def test_aggregation_convergence_over_multiple_rounds(self):
+        """Aggregating near-converged nodes repeatedly stays close to the shared mean."""
+        rng = np.random.default_rng(99)
+        shape = (32, 16)
+        num_nodes = 6
+        num_rounds = 3
+        samples = [1000] * num_nodes
+
+        # True mean represents a converged global model
+        true_mean = rng.normal(0.0, 0.05, size=shape).astype(np.float32)
+
+        aggregated = None
+        for _ in range(num_rounds):
+            # Each node's weights are the true mean plus small local noise
+            node_weights = [
+                [true_mean + rng.normal(0.0, 0.01, size=shape).astype(np.float32)]
+                for _ in range(num_nodes)
+            ]
+            aggregated = aggregation_model_weights_weighted_average(
+                list(zip(node_weights, samples))
+            )
+
+        np.testing.assert_array_almost_equal(aggregated[0], true_mean, decimal=1)
+
+    def test_aggregation_with_heterogeneous_realistic_sample_counts(self):
+        """Weighted average is numerically correct with realistic, heterogeneous sample counts."""
+        # Simulate nodes representing hospitals/sites of different sizes
+        rng = np.random.default_rng(13)
+        shape = (16,)
+        samples_per_node = [500, 1200, 3000, 250, 800, 4500]
+        total = sum(samples_per_node)
+
+        node_weights = [rng.normal(0.0, 0.1, size=shape).astype(np.float32) for _ in samples_per_node]
+
+        aggregated = aggregation_model_weights_weighted_average(
+            [([w], n) for w, n in zip(node_weights, samples_per_node)]
+        )
+
+        # Manually compute the expected weighted average
+        expected = sum(w * n for w, n in zip(node_weights, samples_per_node)) / total
+        np.testing.assert_array_almost_equal(aggregated[0], expected.astype(np.float32), decimal=5)
+
+    @pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
+    class TestRealisticPyTorchWorkflow:
+        """Realistic end-to-end tests using actual PyTorch weight initialisations."""
+
+        def test_aggregation_of_freshly_initialised_models(self):
+            """Freshly initialised PyTorch models aggregate to weights of the correct shape and magnitude."""
+            import torch
+            import torch.nn as nn
+
+            def _make_model():
+                return nn.Sequential(
+                    nn.Linear(64, 128),
+                    nn.Linear(128, 64),
+                    nn.Linear(64, 32),
+                )
+
+            num_nodes = 5
+            samples_per_node = [1000, 2000, 1500, 800, 3000]
+
+            node_weights = []
+            for seed in range(num_nodes):
+                torch.manual_seed(seed)
+                model = _make_model()
+                node_weights.append([p.detach().cpu().numpy() for p in model.parameters()])
+
+            aggregated = aggregation_model_weights_weighted_average(
+                list(zip(node_weights, samples_per_node))
+            )
+
+            expected_shapes = [(128, 64), (128,), (64, 128), (64,), (32, 64), (32,)]
+            for agg_w, expected_shape in zip(aggregated, expected_shapes):
+                assert agg_w.shape == expected_shape
+                assert agg_w.dtype == np.float32
+
+            # Aggregated weight matrices should stay within typical Kaiming/Xavier range
+            for agg_w in aggregated[0::2]:
+                assert np.abs(agg_w).max() < 1.0, "Aggregated weights are unexpectedly large"
+
+        def test_aggregated_model_produces_finite_inference(self):
+            """A model loaded with realistic aggregated weights produces finite (non-NaN) inference."""
+            import torch
+            import torch.nn as nn
+
+            def _make_model():
+                return nn.Sequential(nn.Linear(16, 32), nn.ReLU(), nn.Linear(32, 8))
+
+            num_nodes = 4
+            samples_per_node = [500, 750, 1000, 250]
+            parameter_names = ["0.weight", "0.bias", "2.weight", "2.bias"]
+
+            node_weights = []
+            for seed in range(num_nodes):
+                torch.manual_seed(seed * 10)
+                model = _make_model()
+                node_weights.append([p.detach().cpu().numpy() for p in model.parameters()])
+
+            aggregated = aggregation_model_weights_weighted_average(
+                list(zip(node_weights, samples_per_node))
+            )
+
+            serialized = weights_to_json(aggregated)
+            new_model = _make_model()
+            load_model_from_json_weights(new_model, serialized, parameter_names)
+
+            torch.manual_seed(0)
+            test_input = torch.randn(32, 16)
+            with torch.no_grad():
+                output = new_model(test_input)
+
+            assert output.shape == (32, 8)
+            assert torch.isfinite(output).all(), "Inference produced NaN or Inf values"
+
+
+# =============================================================================
 # Empirical Tests for sort_columns
 # =============================================================================
 
