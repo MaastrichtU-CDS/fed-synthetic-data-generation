@@ -6,9 +6,9 @@ produce mathematically correct results.
 """
 
 import importlib.util
+import pytest
 
 import numpy as np
-import pytest
 
 _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 

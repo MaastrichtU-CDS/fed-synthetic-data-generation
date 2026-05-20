@@ -6,12 +6,12 @@ produces functional, usable results.
 """
 
 import importlib.util
+import os
+import pytest
+import tempfile
 
 import numpy as np
 import pandas as pd
-import pytest
-import tempfile
-import os
 
 _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 

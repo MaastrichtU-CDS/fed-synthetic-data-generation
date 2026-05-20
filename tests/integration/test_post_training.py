@@ -6,11 +6,11 @@ dependencies like PyTorch, file I/O, and other modules.
 """
 
 import importlib.util
-
-import numpy as np
+import os
 import pytest
 import tempfile
-import os
+
+import numpy as np
 
 _TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 

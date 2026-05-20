@@ -8,6 +8,7 @@ federated learning context with privacy-preserving capabilities.
 from .federated_training import (
     aggregation_model_weights_weighted_average,
     evaluate_loss,
+    lr_determination,
     should_stop_early,
 )
 
@@ -29,6 +30,7 @@ from .utils import (
 __all__ = [
     "aggregation_model_weights_weighted_average",
     "evaluate_loss",
+    "lr_determination",
     "should_stop_early",
     "load_weights_into_model",
     "load_model_from_json_weights",

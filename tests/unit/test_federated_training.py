@@ -5,8 +5,9 @@ This module contains unit tests for the weighted-average aggregation function,
 evaluate_loss, and should_stop_early used in federated synthetic data training.
 """
 
-import numpy as np
 import pytest
+
+import numpy as np
 
 from fed_synthetic_data.federated_training import (
     aggregation_model_weights_weighted_average,

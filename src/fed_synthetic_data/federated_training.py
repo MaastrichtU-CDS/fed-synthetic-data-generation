@@ -6,12 +6,10 @@ of synthetic data generators across multiple nodes. These are intended to be
 imported into a vantage6 algorithm.
 """
 
-from typing import Any, cast
-
 import numpy as np
 
 from functools import reduce
-
+from typing import Any, cast
 
 def aggregation_model_weights_weighted_average(
     results: list[tuple[list[np.ndarray] | dict[str, np.ndarray], int]],

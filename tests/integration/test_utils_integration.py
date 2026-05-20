@@ -6,7 +6,6 @@ within the library's workflows.
 """
 
 import numpy as np
-import pytest
 import pandas as pd
 
 from fed_synthetic_data.utils import sort_columns, weights_to_json, weights_from_json

@@ -7,15 +7,16 @@ work together correctly: aggregation -> serialisation -> deserialisation -> load
 These are library-internal integration tests, not framework-specific (e.g., vantage6).
 """
 
-import numpy as np
 import pytest
+
+import numpy as np
 
 from fed_synthetic_data.federated_training import (
     aggregation_model_weights_weighted_average,
     evaluate_loss,
     should_stop_early,
 )
-from fed_synthetic_data.utils import weights_to_json, weights_from_json
+from fed_synthetic_data.utils import weights_to_json
 from fed_synthetic_data.post_training import load_model_from_json_weights
 
 # =============================================================================

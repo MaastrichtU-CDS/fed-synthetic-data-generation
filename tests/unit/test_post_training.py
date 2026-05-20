@@ -5,10 +5,12 @@ Pure unit tests for weight loading functions, using mocks for dependencies.
 Integration tests (PyTorch, file I/O, cross-module) belong in tests/integration/.
 """
 
-import numpy as np
+import os
 import pytest
 import tempfile
-import os
+
+import numpy as np
+
 from unittest.mock import patch, MagicMock
 
 from fed_synthetic_data.post_training import (

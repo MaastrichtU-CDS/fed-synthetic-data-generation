@@ -8,9 +8,10 @@ utils.py.
 
 import numpy as np
 
-from fed_synthetic_data.utils import weights_from_json
 from types import ModuleType
 from typing import Any, Protocol
+
+from .utils import weights_from_json
 
 torch: ModuleType | None
 try:
