@@ -11,6 +11,7 @@ import numpy as np
 from functools import reduce
 from typing import Any, cast
 
+
 def aggregation_model_weights_weighted_average(
     results: list[tuple[list[np.ndarray] | dict[str, np.ndarray], int]],
 ) -> list[np.ndarray] | dict[str, np.ndarray]:
