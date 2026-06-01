@@ -5,7 +5,6 @@ This module provides general utility functions used across the library.
 """
 
 import base64
-import math
 
 import numpy as np
 import pandas as pd
@@ -79,97 +78,6 @@ def weights_from_json(entries: list[dict]) -> list[np.ndarray] | dict[str, np.nd
         np.frombuffer(base64.b64decode(e["data"]), dtype=e["dtype"]).reshape(e["shape"])
         for e in entries
     ]
-
-
-def _replace_non_finite(obj):
-    """Recursively replace non-finite floats with JSON-safe sentinel strings."""
-    if isinstance(obj, float):
-        if math.isinf(obj):
-            return "Infinity" if obj > 0 else "-Infinity"
-        if math.isnan(obj):
-            return "NaN"
-    elif isinstance(obj, dict):
-        return {k: _replace_non_finite(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_replace_non_finite(v) for v in obj]
-    return obj
-
-
-def _restore_non_finite(obj):
-    """Recursively restore JSON-safe sentinel strings back to Python floats."""
-    if obj == "Infinity":
-        return float("inf")
-    if obj == "-Infinity":
-        return float("-inf")
-    if obj == "NaN":
-        return float("nan")
-    if isinstance(obj, dict):
-        return {k: _restore_non_finite(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_restore_non_finite(v) for v in obj]
-    return obj
-
-
-def federated_state_to_json(state: dict) -> dict:
-    """
-    Produce a fully JSON-serialisable representation of a ``federated_state`` dict.
-
-    Handles the three standard keys returned by fed-mostlyai-engine:
-
-    * ``"model_weights"`` — serialised via :func:`weights_to_json` (dict path).
-    * ``"training_metrics"`` — passed through unchanged (all values are standard
-      JSON types).
-    * ``"lr_scheduler_state"`` — any ``float('inf')``, ``float('-inf')``, or
-      ``float('nan')`` values are replaced recursively with the sentinel strings
-      ``"Infinity"``, ``"-Infinity"``, and ``"NaN"`` so that ``json.dumps``
-      does not raise.
-
-    Missing keys are silently ignored so that partial ``federated_state`` dicts
-    (e.g. without ``"training_metrics"``) are handled without error.
-
-    Args:
-        state (dict): A ``federated_state`` dict as returned by fed-mostlyai-engine.
-
-    Returns:
-        dict: A new dict whose values are fully JSON-serialisable.
-    """
-    result = {}
-    if "model_weights" in state:
-        result["model_weights"] = weights_to_json(state["model_weights"])
-    if "training_metrics" in state:
-        result["training_metrics"] = state["training_metrics"]
-    if "lr_scheduler_state" in state:
-        result["lr_scheduler_state"] = _replace_non_finite(state["lr_scheduler_state"])
-    return result
-
-
-def federated_state_from_json(state: dict) -> dict:
-    """
-    Invert :func:`federated_state_to_json`, recovering the original Python objects.
-
-    * ``"model_weights"`` — deserialised via :func:`weights_from_json`.
-    * ``"training_metrics"`` — passed through unchanged.
-    * ``"lr_scheduler_state"`` — sentinel strings ``"Infinity"``, ``"-Infinity"``,
-      and ``"NaN"`` are converted back to the corresponding Python floats.
-
-    Missing keys are silently ignored.
-
-    Args:
-        state (dict): A JSON-deserialised ``federated_state`` dict (as produced
-            by :func:`federated_state_to_json`).
-
-    Returns:
-        dict: The recovered ``federated_state`` with numpy weight arrays and
-            native Python floats.
-    """
-    result = {}
-    if "model_weights" in state:
-        result["model_weights"] = weights_from_json(state["model_weights"])
-    if "training_metrics" in state:
-        result["training_metrics"] = state["training_metrics"]
-    if "lr_scheduler_state" in state:
-        result["lr_scheduler_state"] = _restore_non_finite(state["lr_scheduler_state"])
-    return result
 
 
 def sort_columns(df: pd.DataFrame, column_order: list[str] | None = None) -> pd.DataFrame:
