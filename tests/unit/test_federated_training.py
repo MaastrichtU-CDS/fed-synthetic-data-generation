@@ -5,6 +5,7 @@ This module contains unit tests for the weighted-average aggregation function,
 evaluate_loss, and should_stop_early used in federated synthetic data training.
 """
 
+import math
 import pytest
 
 import numpy as np
@@ -12,6 +13,8 @@ import numpy as np
 from fed_synthetic_data.federated_training import (
     aggregation_model_weights_weighted_average,
     evaluate_loss,
+    lr_determination,
+    reducelr_on_plateau_step,
     should_stop_early,
 )
 
@@ -333,3 +336,210 @@ class TestAggregationDictWeights:
         aggregated = aggregation_model_weights_weighted_average([(w, 42)])
 
         np.testing.assert_array_almost_equal(aggregated["p"], w["p"])
+
+
+class TestReducelrOnPlateauStep:
+    """Test cases for reducelr_on_plateau_step."""
+
+    def test_initial_state_min_mode(self):
+        """Initial state is set correctly for min mode."""
+        # With metric=1.0 and mode="min", best is updated from inf to 1.0
+        new_lr, state = reducelr_on_plateau_step(0.1, 1.0, {}, mode="min")
+        assert new_lr == 0.1
+        assert state["best"] == 1.0
+        assert state["num_bad_epochs"] == 0
+
+    def test_initial_state_max_mode(self):
+        """Initial state is set correctly for max mode."""
+        # With metric=1.0 and mode="max", best is updated from -inf to 1.0
+        new_lr, state = reducelr_on_plateau_step(0.1, 1.0, {}, mode="max")
+        assert new_lr == 0.1
+        assert state["best"] == 1.0
+        assert state["num_bad_epochs"] == 0
+
+    def test_improving_metric_min_mode(self):
+        """Metric improvement in min mode resets bad epochs counter."""
+        state = {"best": 1.0, "num_bad_epochs": 5}
+        new_lr, new_state = reducelr_on_plateau_step(0.1, 0.5, state, mode="min")
+        assert new_lr == 0.1
+        assert new_state["best"] == 0.5
+        assert new_state["num_bad_epochs"] == 0
+
+    def test_improving_metric_max_mode(self):
+        """Metric improvement in max mode resets bad epochs counter."""
+        state = {"best": 1.0, "num_bad_epochs": 5}
+        new_lr, new_state = reducelr_on_plateau_step(0.1, 2.0, state, mode="max")
+        assert new_lr == 0.1
+        assert new_state["best"] == 2.0
+        assert new_state["num_bad_epochs"] == 0
+
+    def test_no_improvement_increments_bad_epochs(self):
+        """No improvement increments the bad epochs counter."""
+        state = {"best": 0.5, "num_bad_epochs": 2}
+        new_lr, new_state = reducelr_on_plateau_step(0.1, 0.6, state, mode="min")
+        assert new_lr == 0.1
+        assert new_state["best"] == 0.5
+        assert new_state["num_bad_epochs"] == 3
+
+    def test_patience_exceeded_reduces_lr(self):
+        """Exceeding patience reduces the learning rate."""
+        state = {"best": 0.5, "num_bad_epochs": 10}
+        new_lr, new_state = reducelr_on_plateau_step(
+            0.1, 0.6, state, mode="min", patience=10, factor=0.1
+        )
+        assert new_lr == pytest.approx(0.01)
+        assert new_state["num_bad_epochs"] == 0
+
+    def test_min_lr_respected(self):
+        """Learning rate is not reduced below min_lr."""
+        state = {"best": 0.5, "num_bad_epochs": 10}
+        new_lr, new_state = reducelr_on_plateau_step(
+            0.001, 0.6, state, mode="min", patience=10, factor=0.1, min_lr=0.0005
+        )
+        assert new_lr == pytest.approx(0.0005)
+
+    def test_eps_prevents_insignificant_updates(self):
+        """Updates smaller than eps are ignored."""
+        state = {"best": 0.5, "num_bad_epochs": 10}
+        # 0.1 * 0.1 = 0.01, difference is 0.09 > eps (1e-8)
+        new_lr, new_state = reducelr_on_plateau_step(
+            0.1, 0.6, state, mode="min", patience=10, factor=0.1, eps=0.1
+        )
+        # Should not update because 0.1 - 0.01 = 0.09 < eps=0.1
+        assert new_lr == 0.1
+        assert new_state["num_bad_epochs"] == 0
+
+    def test_relative_threshold_min_mode(self):
+        """Relative threshold is computed correctly in min mode."""
+        state = {"best": 1.0, "num_bad_epochs": 0}
+        # threshold = 0.1, rel mode: metric < best * (1 - 0.1) = 1.0 * 0.9 = 0.9
+        new_lr, new_state = reducelr_on_plateau_step(
+            0.1, 0.89, state, mode="min", threshold=0.1, threshold_mode="rel"
+        )
+        # 0.89 < 0.9, so should be better
+        assert new_state["num_bad_epochs"] == 0
+        assert new_state["best"] == 0.89
+
+    def test_absolute_threshold_min_mode(self):
+        """Absolute threshold is computed correctly in min mode."""
+        state = {"best": 1.0, "num_bad_epochs": 0}
+        # threshold = 0.1, abs mode: metric < best - 0.1 = 0.9
+        new_lr, new_state = reducelr_on_plateau_step(
+            0.1, 0.89, state, mode="min", threshold=0.1, threshold_mode="abs"
+        )
+        # 0.89 < 0.9, so should be better
+        assert new_state["num_bad_epochs"] == 0
+        assert new_state["best"] == 0.89
+
+    def test_invalid_mode_raises(self):
+        """Invalid mode raises ValueError."""
+        with pytest.raises(ValueError, match="mode 'invalid' is unknown"):
+            reducelr_on_plateau_step(0.1, 1.0, {}, mode="invalid")
+
+    def test_invalid_threshold_mode_raises(self):
+        """Invalid threshold_mode raises ValueError."""
+        with pytest.raises(ValueError, match="threshold_mode 'invalid' is unknown"):
+            reducelr_on_plateau_step(0.1, 1.0, {}, threshold_mode="invalid")
+
+    def test_invalid_factor_raises(self):
+        """Factor >= 1.0 raises ValueError."""
+        with pytest.raises(ValueError, match="Factor should be < 1.0"):
+            reducelr_on_plateau_step(0.1, 1.0, {}, factor=1.0)
+
+    def test_multiple_reductions(self):
+        """Multiple reductions work correctly in sequence."""
+        state = {}
+        lr = 1.0
+
+        # First call - initial state, metric improves from inf to 1.0
+        lr, state = reducelr_on_plateau_step(lr, 1.0, state, mode="min", patience=1)
+        assert lr == 1.0
+
+        # Second call - no improvement (1.0 not < 1.0), num_bad_epochs becomes 1
+        # but patience=1, so need one more call to exceed patience
+        lr, state = reducelr_on_plateau_step(lr, 1.0, state, mode="min", patience=1, factor=0.5)
+        assert lr == 1.0  # Not reduced yet, num_bad_epochs=1 not > patience=1
+
+        # Third call - no improvement, num_bad_epochs becomes 2, which > patience=1
+        # LR reduces: 1.0 -> 0.5; num_bad_epochs resets to 0
+        lr, state = reducelr_on_plateau_step(lr, 1.0, state, mode="min", patience=1, factor=0.5)
+        assert lr == pytest.approx(0.5)
+
+        # Fourth call - no improvement, num_bad_epochs becomes 1 (not > patience=1, no reduction yet)
+        lr, state = reducelr_on_plateau_step(lr, 1.0, state, mode="min", patience=1, factor=0.5)
+        assert lr == pytest.approx(0.5)
+
+        # Fifth call - no improvement, num_bad_epochs becomes 2, which > patience=1
+        # LR reduces: 0.5 -> 0.25; num_bad_epochs resets to 0
+        lr, state = reducelr_on_plateau_step(lr, 1.0, state, mode="min", patience=1, factor=0.5)
+        assert lr == pytest.approx(0.25)
+
+    def test_plateau_behaviour(self):
+        """Plateau (no change) is treated as no improvement."""
+        state = {"best": 0.5, "num_bad_epochs": 5}
+        new_lr, new_state = reducelr_on_plateau_step(
+            0.1, 0.5, state, mode="min", patience=5, factor=0.1
+        )
+        # Same metric as best -> no improvement -> bad epochs increments
+        # Then patience exceeded -> LR reduced
+        assert new_lr == pytest.approx(0.01)
+
+
+class TestLrDetermination:
+    """Test cases for lr_determination."""
+
+    def test_reducelr_on_plateau_scheduler(self):
+        """lr_determination works with reducelr_on_plateau scheduler."""
+        new_lr, state = lr_determination(
+            0.1, 1.0, scheduler="reducelr_on_plateau", state=None
+        )
+        assert new_lr == 0.1
+        assert "best" in state
+        assert "num_bad_epochs" in state
+
+    def test_unsupported_scheduler_raises(self):
+        """Unsupported scheduler raises ValueError."""
+        with pytest.raises(ValueError, match="Scheduler 'unknown' is not supported"):
+            lr_determination(0.1, 1.0, scheduler="unknown")
+
+    def test_passes_kwargs_to_scheduler(self):
+        """Additional kwargs are passed to the scheduler."""
+        new_lr, state = lr_determination(
+            0.1,
+            1.0,
+            scheduler="reducelr_on_plateau",
+            state=None,
+            mode="max",
+            factor=0.5,
+            patience=5,
+        )
+        assert new_lr == 0.1
+        assert state["best"] == 1.0  # max mode: -inf updated to 1.0 because 1.0 > -inf
+
+    def test_state_persists_between_calls(self):
+        """State persists correctly between calls."""
+        state = None
+
+        # First call - metric improves from inf to 1.0
+        lr, state = lr_determination(
+            1.0, 1.0, scheduler="reducelr_on_plateau", state=state, patience=1
+        )
+        assert lr == 1.0
+
+        # Second call - no improvement, num_bad_epochs=1, not > patience=1 yet
+        lr, state = lr_determination(
+            lr, 1.0, scheduler="reducelr_on_plateau", state=state, patience=1, factor=0.5
+        )
+        assert lr == 1.0  # Not reduced yet
+
+        # Third call - no improvement, num_bad_epochs=2 > patience=1, should reduce LR
+        lr, state = lr_determination(
+            lr, 1.0, scheduler="reducelr_on_plateau", state=state, patience=1, factor=0.5
+        )
+        assert lr == pytest.approx(0.5)
+
+    def test_default_scheduler_is_reducelr_on_plateau(self):
+        """Default scheduler is reducelr_on_plateau."""
+        new_lr, state = lr_determination(0.1, 1.0)
+        assert new_lr == 0.1
+        assert "best" in state

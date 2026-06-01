@@ -159,7 +159,7 @@ def reducelr_on_plateau_step(
     """
     Compute the next learning rate using ReduceLROnPlateau logic.
 
-    This is a pure function that implements the learning rate reduction logic
+    This is a pure function that ports the learning rate reduction logic
     from PyTorch's ReduceLROnPlateau scheduler
     (https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.ReduceLROnPlateau.html).
     It reduces the learning rate by a factor when a metric has stopped improving
