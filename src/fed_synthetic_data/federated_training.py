@@ -6,6 +6,7 @@ of synthetic data generators across multiple nodes. These are intended to be
 imported into a vantage6 algorithm.
 """
 
+import math
 import numpy as np
 
 from functools import reduce
@@ -142,9 +143,160 @@ def should_stop_early(
     return recent_best > best_before_window - min_delta
 
 
-def lr_determination():
+def reducelr_on_plateau_step(
+    current_lr: float,
+    metric: float,
+    state: dict[str, Any],
+    *,
+    mode: str = "min",
+    factor: float = 0.1,
+    patience: int = 10,
+    threshold: float = 1e-4,
+    threshold_mode: str = "rel",
+    min_lr: float = 0.0,
+    eps: float = 1e-8,
+) -> tuple[float, dict[str, Any]]:
     """
-    TODO: Determine learning rate for the next round of federated training.
-    This is to ensure that the LR can be coordinated across all nodes.
+    Compute the next learning rate using ReduceLROnPlateau logic.
+
+    This is a pure function that implements the learning rate reduction logic
+    from PyTorch's ReduceLROnPlateau scheduler
+    (https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.ReduceLROnPlateau.html).
+    It reduces the learning rate by a factor when a metric has stopped improving
+    for a specified number of iterations (patience).
+
+    The caller is responsible for maintaining the state dictionary between
+    calls. Initial state can be obtained by calling this function with an
+    empty dict or None (handled internally).
+
+    Args:
+        current_lr (float): The current learning rate.
+        metric (float): The current value of the monitored metric (e.g. loss).
+        state (dict[str, Any]): Dictionary containing scheduler state:
+            - "best": float - Best metric value seen so far.
+            - "num_bad_epochs": int - Number of consecutive epochs without
+              improvement.
+        mode (str): One of "min" or "max". In "min" mode, the learning rate
+            will be reduced when the metric stops decreasing; in "max" mode,
+            when the metric stops increasing. Defaults to "min".
+        factor (float): Factor by which the learning rate will be reduced:
+            new_lr = lr * factor. Must be < 1.0. Defaults to 0.1.
+        patience (int): Number of epochs with no improvement after which
+            the learning rate will be reduced. Defaults to 10.
+        threshold (float): Threshold for measuring the new optimum,
+            to only focus on significant changes. Defaults to 1e-4.
+        threshold_mode (str): One of "rel" or "abs". In "rel" mode, the
+            dynamic threshold is computed relative to the best value;
+            in "abs" mode, it is an absolute difference. Defaults to "rel".
+        min_lr (float): A lower bound on the learning rate. Defaults to 0.0.
+        eps (float): Minimal decay applied to lr. If the difference between
+            new and old lr is smaller than eps, the update is ignored.
+            Defaults to 1e-8.
+
+    Returns:
+        tuple[float, dict[str, Any]]: A tuple containing:
+            - The new learning rate.
+            - The updated state dictionary.
+
+    Raises:
+        ValueError: If mode is not "min" or "max".
+        ValueError: If threshold_mode is not "rel" or "abs".
+        ValueError: If factor is >= 1.0.
     """
-    pass
+    if factor >= 1.0:
+        raise ValueError("Factor should be < 1.0.")
+
+    if mode not in {"min", "max"}:
+        raise ValueError(f"mode '{mode}' is unknown! Expected 'min' or 'max'.")
+
+    if threshold_mode not in {"rel", "abs"}:
+        raise ValueError(
+            f"threshold_mode '{threshold_mode}' is unknown! Expected 'rel' or 'abs'."
+        )
+
+    # Initialise state if empty
+    if not state:
+        state = {
+            "best": math.inf if mode == "min" else -math.inf,
+            "num_bad_epochs": 0,
+        }
+
+    best = state["best"]
+    num_bad_epochs = state["num_bad_epochs"]
+
+    # Check if current metric is better than best
+    if mode == "min" and threshold_mode == "rel":
+        is_better = metric < best * (1.0 - threshold)
+    elif mode == "min" and threshold_mode == "abs":
+        is_better = metric < best - threshold
+    elif mode == "max" and threshold_mode == "rel":
+        is_better = metric > best * (1.0 + threshold)
+    else:  # mode == "max" and threshold_mode == "abs"
+        is_better = metric > best + threshold
+
+    if is_better:
+        best = metric
+        num_bad_epochs = 0
+    else:
+        num_bad_epochs += 1
+
+    if num_bad_epochs > patience:
+        new_lr = max(current_lr * factor, min_lr)
+        if current_lr - new_lr > eps:
+            current_lr = new_lr
+            num_bad_epochs = 0
+        else:
+            # Update not applied due to eps, but still reset counters
+            num_bad_epochs = 0
+
+    new_state = {
+        "best": best,
+        "num_bad_epochs": num_bad_epochs,
+    }
+
+    return current_lr, new_state
+
+
+def lr_determination(
+    current_lr: float,
+    metric: float,
+    scheduler: str = "reducelr_on_plateau",
+    state: dict[str, Any] | None = None,
+    **kwargs,
+) -> tuple[float, dict[str, Any]]:
+    """
+    Determine learning rate for the next round of federated training.
+
+    This function provides a flexible interface for computing the learning
+    rate using different scheduler strategies. It ensures that the learning
+    rate can be coordinated centrally across all nodes in a federated setting.
+
+    Args:
+        current_lr (float): The current learning rate.
+        metric (float): The current value of the monitored metric
+            (e.g. validation loss).
+        scheduler (str): Name of the scheduler strategy to use.
+            Currently supported: "reducelr_on_plateau". Defaults to
+            "reducelr_on_plateau".
+        state (dict[str, Any] | None): Dictionary containing scheduler state
+            from the previous call. If None, initial state will be created.
+            Defaults to None.
+        **kwargs: Additional keyword arguments specific to the chosen scheduler.
+            For "reducelr_on_plateau": mode, factor, patience, threshold,
+            threshold_mode, min_lr, eps.
+
+    Returns:
+        tuple[float, dict[str, Any]]: A tuple containing:
+            - The new learning rate for the next round.
+            - The updated state dictionary to pass to the next call.
+
+    Raises:
+        ValueError: If the specified scheduler is not supported.
+    """
+    if state is None:
+        state = {}
+
+    if scheduler == "reducelr_on_plateau":
+        return reducelr_on_plateau_step(current_lr, metric, state, **kwargs)
+
+    raise ValueError(f"Scheduler '{scheduler}' is not supported.")
