@@ -490,9 +490,7 @@ class TestLrDetermination:
 
     def test_reducelr_on_plateau_scheduler(self):
         """lr_determination works with reducelr_on_plateau scheduler."""
-        new_lr, state = lr_determination(
-            0.1, 1.0, scheduler="reducelr_on_plateau", state=None
-        )
+        new_lr, state = lr_determination(0.1, 1.0, scheduler="reducelr_on_plateau", state=None)
         assert new_lr == 0.1
         assert "best" in state
         assert "num_bad_epochs" in state

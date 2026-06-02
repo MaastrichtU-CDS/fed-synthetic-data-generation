@@ -210,9 +210,7 @@ def reducelr_on_plateau_step(
         raise ValueError(f"mode '{mode}' is unknown! Expected 'min' or 'max'.")
 
     if threshold_mode not in {"rel", "abs"}:
-        raise ValueError(
-            f"threshold_mode '{threshold_mode}' is unknown! Expected 'rel' or 'abs'."
-        )
+        raise ValueError(f"threshold_mode '{threshold_mode}' is unknown! Expected 'rel' or 'abs'.")
 
     # Initialise state if empty
     if not state:
