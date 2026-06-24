@@ -15,9 +15,9 @@
 
 # Purpose of this repository
 
-This repository provides helper functions for federated synthetic data generator training using e.g. using
+This repository provides helper functions for federated synthetic data generator training, e.g. using
 [fed-mostlyai-engine](https://github.com/skarrea/fed-mostlyai-engine). The functions are designed to be imported
-into a federated algorithm e.g. [Vantage6](https://vantage6.ai) and cover weight aggregation, serialisation for JSON
+into a federated algorithm, e.g. [Vantage6](https://vantage6.ai), and cover weight aggregation, serialisation for JSON
 transport, and data preparation utilities.
 
 Additionally, this lightweight library can be used to compose a model using the federated synthetic data generator
@@ -30,10 +30,10 @@ The code is available as a Python library directly from GitHub or via `pip`.
 The various functions are organised in different sections, consisting of:
 
 src/fed_synthetic_data/ 
-├── federated_training.py # Weight aggregation and JSON serialisation helpers 
-├── utils.py # Data preparation utilities (e.g. column ordering) 
-├── post_training.py # Post-training helpers 
-└── privacy_measures.py # Privacy measurement utilities
+├── federated_training.py # Weight aggregation, JSON serialisation, loss evaluation, learning rate scheduling, early stopping
+├── utils.py # Data preparation (column ordering), weight serialisation/deserialisation
+├── post_training.py # Model weight loading and saving
+└── privacy_measures.py # Privacy enhancing measures (planned)
 
 
 # Usage
@@ -82,7 +82,7 @@ setup(
         "numpy",
         "pandas",
         "mostlyai-engine>=2.4.0",
-        "fed-synthetic-data-generation @ git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git@v0.1.0",
+        "fed-synthetic-data-generation @ git+https://github.com/MaastrichtU-CDS/fed-synthetic-data-generation.git@version",
         # other dependencies
     ]
 )
@@ -146,10 +146,17 @@ tests/
 ├── conftest.py                           # Common fixtures and test utilities
 ├── unit/                                 # Unit tests for individual functions
 │   ├── test_federated_training.py        # Tests for federated training functions
-│   ├── test_privacy_measures.py          # Tests for privacy functions
-│   └── test_utils.py                     # Tests for utility functions 
-└── utils/                                # Test helper utilities
-    └── test_helpers.py                   # Validation and comparison tools
+│   ├── test_post_training.py             # Tests for post-training functions
+│   ├── test_utils.py                     # Tests for utility functions
+│   └── test_imports.py                   # Tests for package imports
+├── integration/                          # Integration tests
+│   ├── test_post_training.py             # Integration tests for post-training
+│   ├── test_serialisation_pipeline.py   # Tests for serialisation pipeline
+│   └── test_utils_integration.py         # Integration tests for utilities
+└── empirical/                            # Empirical validation tests
+    ├── test_learning_rate_schedulers.py  # Tests for LR schedulers
+    ├── test_mathematical_correctness.py # Mathematical validation tests
+    └── test_pipeline_functionality.py   # Pipeline functionality tests
 ```
 
 ## Running Tests
@@ -175,10 +182,10 @@ pytest tests/unit/
 pytest tests/empirical/
 
 # Run with coverage report
-pytest --cov=vantage6_strongaya_general --cov-report=html
+pytest --cov=fed_synthetic_data --cov-report=html
 
 # Run specific test module
-pytest tests/unit/test_general_statistics.py
+pytest tests/unit/test_federated_training.py
 
 # Run with verbose output
 pytest -v
@@ -190,49 +197,12 @@ pytest -v
 - **Performance Tests**: Benchmark function performance with large datasets
 - **Edge Case Tests**: Test behaviour with unusual data distributions
 
-### Federated vs Centralised Validation
 
-The test suite includes comprehensive empirical validation that federated statistical computations produce equivalent
-results to their centralised counterparts:
-
-```python
-
-```
-
-### Continuous Integration
-
-Tests run automatically on every push and pull request via GitHub Actions:
-
-- Multiple Python versions (starting with 3.10)
-- Code coverage reporting
-- Performance benchmarking
-- Security scanning
-
-## Contributing to Tests
-
-When contributing new functionality:
-
-1. **Add unit tests** for all new functions
-2. **Add integration tests** for complete workflows
-3. **Add empirical tests** for federated vs centralised scenarios
-3. **Include edge case testing** for robustness
-4. **Update test data** if needed for new scenarios
-5. **Maintain an acceptable degree of code coverage**
-
-### Test Guidelines
-
-- Use descriptive test names that explain what is being tested
-- Include both positive and negative test cases
-- Test edge cases and error conditions
-- Use realistic synthetic data
-- Mock external dependencies (AlgorithmClient, environment variables)
-- Validate both structure and values of results
-
-# Contributers
+# Contributors
 
 - J. Hogenboom
 - B. S. Abrahamsen
 
 # References
 
-- [Vantage6](vantage6.ai)
+- [Vantage6](https://vantage6.ai)
