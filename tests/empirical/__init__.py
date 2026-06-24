@@ -1,1 +1,1 @@
-"""Empirical tests package."""
+# Empirical tests for federated synthetic data generation library
